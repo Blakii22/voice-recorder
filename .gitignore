@@ -1,0 +1,27 @@
+# User-specific config (contains API keys — never commit!)
+config.json
+
+# Local transcription log
+log.csv
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Whisper model cache (downloaded automatically, no need to track)
+# Usually stored in ~/.cache/huggingface — not in this folder
+
+# Temp audio files
+*.wav
+*.tmp
+
+# OS clutter
+.DS_Store
+Thumbs.db
