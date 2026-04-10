@@ -88,6 +88,14 @@ class SetupWizard(ctk.CTk):
         self._lbl_s2_t.configure(text=t("step2_title"))
         self._lbl_s2_d.configure(text=t("step2_desc"))
         
+        mode_vals = [t("step2_mode_ptt"), t("step2_mode_toggle")]
+        if hasattr(self, "_mode_combo"):
+            self._mode_combo.configure(values=mode_vals)
+            if getattr(self, "_current_mode", "ptt") == "ptt":
+                self._mode_combo.set(mode_vals[0])
+            else:
+                self._mode_combo.set(mode_vals[1])
+        
         if self._capturing_hotkey:
             self._hotkey_btn.configure(text=t("step2_listening"))
             self._hotkey_label.configure(text=t("step2_waiting"))
@@ -217,11 +225,19 @@ class SetupWizard(ctk.CTk):
     # Step 2 — hotkey ---------------------------------------------------------
 
     def _build_step2(self, f: ctk.CTkFrame):
+        self._current_mode = "ptt"
         self._lbl_s2_t = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=15, weight="bold"), text_color=TEXT)
         self._lbl_s2_t.pack(anchor="w", padx=28, pady=(28, 4))
         
         self._lbl_s2_d = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=12), text_color=MUTED, wraplength=380, justify="left")
         self._lbl_s2_d.pack(anchor="w", padx=28)
+
+        self._mode_combo = ctk.CTkComboBox(
+            f, height=42, corner_radius=10, fg_color=SURFACE2,
+            border_color=SURFACE2, dropdown_fg_color=SURFACE2,
+            font=ctk.CTkFont(size=12), command=self._on_mode_change
+        )
+        self._mode_combo.pack(fill="x", padx=28, pady=(16, 0))
 
         self._hotkey_btn = ctk.CTkButton(
             f, text="", height=52, corner_radius=10, font=ctk.CTkFont(size=13),
@@ -238,6 +254,12 @@ class SetupWizard(ctk.CTk):
 
         self._lbl_s2_tip = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=11), text_color=MUTED, wraplength=380, justify="left")
         self._lbl_s2_tip.pack(anchor="w", padx=28, pady=(16, 0))
+
+    def _on_mode_change(self, val):
+        if val == t("step2_mode_ptt"):
+            self._current_mode = "ptt"
+        elif val == t("step2_mode_toggle"):
+            self._current_mode = "toggle"
 
     # Step 3 — device ---------------------------------------------------------
 
@@ -288,6 +310,7 @@ class SetupWizard(ctk.CTk):
     # ── Step navigation ──────────────────────────────────────────────────────
 
     def _show_step(self, step: int):
+        self.focus_set()
         for i, dot in enumerate(self._dots):
             dot.configure(fg_color=ACCENT if i <= step else SURFACE2)
 
@@ -373,15 +396,18 @@ class SetupWizard(ctk.CTk):
             captured = []
 
             def on_press(k):
-                if not captured:
+                if k not in captured:
                     captured.append(k)
-                return False  # stop listener
 
-            with kb.Listener(on_press=on_press) as ls:
+            def on_release(k):
+                if captured:
+                    return False
+
+            with kb.Listener(on_press=on_press, on_release=on_release) as ls:
                 ls.join()
 
             if captured:
-                self.after(0, lambda: self._on_key_captured(captured[0]))
+                self.after(0, lambda: self._on_key_captured(tuple(captured)))
 
         threading.Thread(target=_listen, daemon=True, name="HotkeyCapture").start()
 
@@ -520,6 +546,7 @@ class SetupWizard(ctk.CTk):
         self.result = {
             "speaker_name": self._name_var.get().strip(),
             "hotkey_str": serialize_key(self._captured_key),
+            "recording_mode": getattr(self, "_current_mode", "ptt"),
             "audio_device_index": dev_idx,
             "audio_device_name": dev_name,
             "model_size": "medium",

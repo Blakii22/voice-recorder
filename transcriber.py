@@ -116,9 +116,13 @@ class Transcriber:
                 segments, _ = self._model.transcribe(
                     wav_path,
                     language=self.language,
-                    beam_size=5,
+                    beam_size=2,
                     vad_filter=True,
-                    vad_parameters={"min_silence_duration_ms": 300},
+                    vad_parameters={
+                        "min_silence_duration_ms": 300,
+                        "max_speech_duration_s": 28.0
+                    },
+                    chunk_length=30,
                 )
             except Exception as e:
                 err_msg = str(e).lower()
@@ -129,9 +133,13 @@ class Transcriber:
                     segments, _ = self._model.transcribe(
                         wav_path,
                         language=self.language,
-                        beam_size=5,
+                        beam_size=2,
                         vad_filter=True,
-                        vad_parameters={"min_silence_duration_ms": 300},
+                        vad_parameters={
+                            "min_silence_duration_ms": 300,
+                            "max_speech_duration_s": 28.0
+                        },
+                        chunk_length=30,
                     )
                 else:
                     raise

@@ -79,7 +79,7 @@ def save_config(cfg: dict):
 def open_settings_window(root: ctk.CTk, config: dict, on_saved):
     """Simple settings editor: name, model size, language."""
     win = ctk.CTkToplevel(root)
-    win.geometry("480x420")
+    win.geometry("480x480")
     win.resizable(False, False)
     win.configure(fg_color="#0d0d14")
     win.grab_set()
@@ -94,9 +94,15 @@ def open_settings_window(root: ctk.CTk, config: dict, on_saved):
 
     labels = {}
 
+    btn_row = ctk.CTkFrame(win, fg_color=BG)
+    btn_row.pack(side="bottom", fill="x", padx=28, pady=(10, 28))
+
+    scroll_f = ctk.CTkScrollableFrame(win, fg_color=BG, scrollbar_button_color=S2)
+    scroll_f.pack(fill="both", expand=True, padx=0, pady=0)
+
     def row(key, widget_factory):
-        f = ctk.CTkFrame(win, fg_color=BG)
-        f.pack(fill="x", padx=28, pady=(0, 14))
+        f = ctk.CTkFrame(scroll_f, fg_color=BG)
+        f.pack(fill="x", padx=16, pady=(0, 14))
         lbl = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=12), text_color=MUTED)
         lbl.pack(anchor="w")
         labels[key] = lbl
@@ -104,9 +110,9 @@ def open_settings_window(root: ctk.CTk, config: dict, on_saved):
         w.pack(fill="x", pady=(4, 0))
         return w
 
-    lbl_title_main = ctk.CTkLabel(win, text="", font=ctk.CTkFont(size=18, weight="bold"),
+    lbl_title_main = ctk.CTkLabel(scroll_f, text="", font=ctk.CTkFont(size=18, weight="bold"),
                                   text_color=TEXT)
-    lbl_title_main.pack(anchor="w", padx=28, pady=(28, 20))
+    lbl_title_main.pack(anchor="w", padx=16, pady=(20, 20))
 
     kw = dict(height=40, corner_radius=10, fg_color=S2, border_color=S2, font=ctk.CTkFont(size=12))
 
@@ -129,13 +135,21 @@ def open_settings_window(root: ctk.CTk, config: dict, on_saved):
         height=40, corner_radius=10, fg_color=S2, border_color=S2,
         dropdown_fg_color=S2, font=ctk.CTkFont(size=12), command=on_lang_change))
 
+    mode_cb = row("settings_mode", lambda p: ctk.CTkComboBox(
+        p, values=[t("step2_mode_ptt"), t("step2_mode_toggle")],
+        height=40, corner_radius=10, fg_color=S2, border_color=S2,
+        dropdown_fg_color=S2, font=ctk.CTkFont(size=12)))
+
     name_e.insert(0, config.get("speaker_name", ""))
     model_cb.set(config.get("model_size", "medium"))
     current_lang = get_language()
     lang_cb.set(LANG_MAP.get(current_lang, LANG_MAP["pl"]))
-
-    btn_row = ctk.CTkFrame(win, fg_color=BG)
-    btn_row.pack(fill="x", padx=28, pady=(10, 28))
+    
+    current_mode = config.get("recording_mode", "ptt")
+    if current_mode == "toggle":
+        mode_cb.set(t("step2_mode_toggle"))
+    else:
+        mode_cb.set(t("step2_mode_ptt"))
     btn_cancel = ctk.CTkButton(btn_row, text="", width=100, height=38, corner_radius=10,
                   fg_color=S2, hover_color=S2, text_color=MUTED,
                   command=lambda: (win.grab_release(), win.destroy()))
@@ -155,13 +169,15 @@ def open_settings_window(root: ctk.CTk, config: dict, on_saved):
             from pynput import keyboard as kb
             captured = []
             def on_press(key):
-                if key != kb.Key.esc:
+                if key != kb.Key.esc and key not in captured:
                     captured.append(key)
-                return False
-            with kb.Listener(on_press=on_press) as ls:
+            def on_release(key):
+                if captured:
+                    return False
+            with kb.Listener(on_press=on_press, on_release=on_release) as ls:
                 ls.join()
             if captured:
-                win.after(0, lambda: _on_hotkey_captured(captured[0]))
+                win.after(0, lambda: _on_hotkey_captured(tuple(captured)))
         import threading
         threading.Thread(target=_listen, daemon=True).start()
 
@@ -170,8 +186,8 @@ def open_settings_window(root: ctk.CTk, config: dict, on_saved):
         name = format_key_name(key)
         btn_hotkey.configure(text=t("step2_change", name=name), fg_color=S2)
 
-    hk_f = ctk.CTkFrame(win, fg_color=BG)
-    hk_f.pack(fill="x", padx=28, pady=(0, 14), before=btn_row)
+    hk_f = ctk.CTkFrame(scroll_f, fg_color=BG)
+    hk_f.pack(fill="x", padx=16, pady=(0, 14))
     lbl_hk = ctk.CTkLabel(hk_f, text=t("step2_title"), font=ctk.CTkFont(size=12), text_color=MUTED)
     lbl_hk.pack(anchor="w")
     current_name = format_key_name(settings_state["hotkey"]) if settings_state["hotkey"] else "..."
@@ -198,6 +214,7 @@ def open_settings_window(root: ctk.CTk, config: dict, on_saved):
         config["speaker_name"] = name_e.get().strip()
         config["model_size"] = model_cb.get()
         config["ui_language"] = INV_LANG_MAP.get(lang_cb.get(), "pl")
+        config["recording_mode"] = "toggle" if mode_cb.get() == t("step2_mode_toggle") else "ptt"
         if settings_state["hotkey"]:
             config["hotkey_str"] = serialize_key(settings_state["hotkey"])
         save_config(config)
@@ -302,71 +319,104 @@ def main():
         root.after(500, lambda: _prompt_device(root, config, recorder))
 
     # ── Hotkey listener ────────────────────────────────────────────────────
-    hk_state = {"target": deserialize_key(config.get("hotkey_str", ""))}
-    if hk_state["target"] is None:
+    hk_state = {
+        "target": deserialize_key(config.get("hotkey_str", "")),
+        "mode": config.get("recording_mode", "ptt")
+    }
+    if not hk_state["target"]:
         logger.error("No valid hotkey in config — please re-run setup.")
         sys.exit(1)
 
     _recording_active = threading.Event()
+    pressed_keys = set()
+    
+    def _stop_and_process():
+        _recording_active.clear()
+        wav_path, status = recorder.stop()
+
+        if status == "too_short":
+            tray.set_state("idle")
+            return
+        if status in ("silent", "empty"):
+            tray.set_state("idle")
+            tray.notify(t("tray_idle"), t("tray_no_audio"))
+            root.after(0, lambda: _prompt_device(root, config, recorder))
+            return
+
+        tray.set_state("transcribing")
+
+        def _pipeline():
+            try:
+                text = transcriber.transcribe(wav_path)
+                logger.info(f"Transcribed: {text[:80]!r}")
+            except Exception as exc:
+                logger.error(f"Transcription failed: {exc}")
+                tray.set_state("error")
+                tray.notify(t("tray_idle"), t("tray_error", exc=str(exc)[:40]))
+                return
+            finally:
+                try:
+                    os.remove(wav_path)
+                except Exception:
+                    pass
+
+            send_transcription(
+                speaker=config["speaker_name"],
+                text=text,
+                on_success=lambda: tray.set_state("sent"),
+                on_failure=lambda e: (
+                    tray.set_state("idle"),
+                    tray.notify(t("tray_idle"), t("tray_saved_fail", e=str(e)[:40])),
+                ),
+            )
+            # Return to idle after a short pause
+            threading.Timer(2.5, lambda: tray.set_state("idle")).start()
+
+        threading.Thread(target=_pipeline, daemon=True, name="Pipeline").start()
 
     def _on_press(key):
-        if key == hk_state["target"] and not _recording_active.is_set():
-            if not transcriber.is_ready():
-                tray.notify(t("tray_idle"), t("tray_loading"))
-                return
-            _recording_active.set()
-            ok2, err2 = recorder.start()
-            if not ok2:
-                _recording_active.clear()
-                logger.warning(f"Recording start failed: {err2}")
-                root.after(0, lambda: _prompt_device(root, config, recorder))
-                return
-            tray.set_state("recording")
+        if key not in pressed_keys:
+            pressed_keys.add(key)
+            
+        target = set(hk_state["target"])
+        if target and target.issubset(pressed_keys):
+            if hk_state["mode"] == "toggle":
+                if _recording_active.is_set():
+                    _stop_and_process()
+                else:
+                    if not transcriber.is_ready():
+                        tray.notify(t("tray_idle"), t("tray_loading"))
+                        return
+                    _recording_active.set()
+                    ok2, err2 = recorder.start()
+                    if not ok2:
+                        _recording_active.clear()
+                        logger.warning(f"Recording start failed: {err2}")
+                        root.after(0, lambda: _prompt_device(root, config, recorder))
+                        return
+                    tray.set_state("recording")
+            else: # ptt
+                if not _recording_active.is_set():
+                    if not transcriber.is_ready():
+                        tray.notify(t("tray_idle"), t("tray_loading"))
+                        return
+                    _recording_active.set()
+                    ok2, err2 = recorder.start()
+                    if not ok2:
+                        _recording_active.clear()
+                        logger.warning(f"Recording start failed: {err2}")
+                        root.after(0, lambda: _prompt_device(root, config, recorder))
+                        return
+                    tray.set_state("recording")
 
     def _on_release(key):
-        if key == hk_state["target"] and _recording_active.is_set():
-            _recording_active.clear()
-            wav_path, status = recorder.stop()
-
-            if status == "too_short":
-                tray.set_state("idle")
-                return
-            if status in ("silent", "empty"):
-                tray.set_state("idle")
-                tray.notify(t("tray_idle"), t("tray_no_audio"))
-                root.after(0, lambda: _prompt_device(root, config, recorder))
-                return
-
-            tray.set_state("transcribing")
-
-            def _pipeline():
-                try:
-                    text = transcriber.transcribe(wav_path)
-                    logger.info(f"Transcribed: {text[:80]!r}")
-                except Exception as exc:
-                    logger.error(f"Transcription failed: {exc}")
-                    tray.set_state("error")
-                    tray.notify(t("tray_idle"), t("tray_error", exc=str(exc)[:40]))
-                    return
-                finally:
-                    try:
-                        os.remove(wav_path)
-                    except Exception:
-                        pass
-
-                send_transcription(
-                    speaker=config["speaker_name"],
-                    text=text,
-                    on_success=lambda: tray.set_state("sent"),
-                    on_failure=lambda e: (
-                        tray.set_state("idle"),
-                        tray.notify(t("tray_idle"), t("tray_saved_fail", e=str(e)[:40])),
-                    ),
-                )
-                # Return to idle after a short pause
-                threading.Timer(2.5, lambda: tray.set_state("idle")).start()
-
-            threading.Thread(target=_pipeline, daemon=True, name="Pipeline").start()
+        if key in pressed_keys:
+            pressed_keys.remove(key)
+            
+        target = set(hk_state["target"])
+        if hk_state["mode"] == "ptt":
+            if _recording_active.is_set() and not target.issubset(pressed_keys):
+                _stop_and_process()
 
     from pynput import keyboard as kb
     listener = kb.Listener(on_press=_on_press, on_release=_on_release)
@@ -384,6 +434,7 @@ def main():
                         logger.info("Settings saved.")
                         # Reload hotkey
                         hk_state["target"] = deserialize_key(config.get("hotkey_str", ""))
+                        hk_state["mode"] = config.get("recording_mode", "ptt")
                     open_settings_window(root, config, on_saved=_on_settings_saved)
                 elif action == "open_log":
                     try:

@@ -6,8 +6,8 @@ from pynput import keyboard as kb
 # Hotkey serialisation
 # ---------------------------------------------------------------------------
 
-def serialize_key(key) -> str:
-    """Convert a pynput key object to a JSON-safe string."""
+def serialize_single_key(key) -> str:
+    """Convert a single pynput key to a string."""
     if isinstance(key, kb.Key):
         return f"Key.{key.name}"
     elif isinstance(key, kb.KeyCode):
@@ -18,8 +18,15 @@ def serialize_key(key) -> str:
     return str(key)
 
 
-def deserialize_key(key_str: str):
-    """Convert a stored string back to a pynput key object."""
+def serialize_key(key) -> str:
+    """Convert key or collection of keys to JSON-safe string."""
+    if isinstance(key, (list, tuple, set)):
+        return "|".join(serialize_single_key(k) for k in key)
+    return serialize_single_key(key)
+
+
+def deserialize_single_key(key_str: str):
+    """Convert string to single pynput key."""
     if not key_str:
         return None
     if key_str.startswith("Key."):
@@ -37,8 +44,21 @@ def deserialize_key(key_str: str):
     return None
 
 
-def format_key_name(key) -> str:
-    """Return a human-readable label for a pynput key."""
+def deserialize_key(key_str: str):
+    """Convert stored string back to tuple of keys."""
+    if not key_str:
+        return tuple()
+    parts = key_str.split("|")
+    keys = []
+    for p in parts:
+        k = deserialize_single_key(p)
+        if k is not None:
+            keys.append(k)
+    return tuple(keys)
+
+
+def format_single_key_name(key) -> str:
+    """Return a human-readable label for a single pynput key."""
     if key is None:
         return "—"
     if isinstance(key, kb.Key):
@@ -67,6 +87,14 @@ def format_key_name(key) -> str:
     return str(key)
 
 
+def format_key_name(key) -> str:
+    if not key:
+        return "—"
+    if isinstance(key, (list, tuple, set)):
+        return " + ".join(format_single_key_name(k) for k in key)
+    return format_single_key_name(key)
+
+
 DANGEROUS_KEYS = {
     kb.Key.esc, kb.Key.enter, kb.Key.backspace,
     kb.Key.tab, kb.Key.space,
@@ -74,4 +102,8 @@ DANGEROUS_KEYS = {
 
 
 def is_dangerous_key(key) -> bool:
+    if isinstance(key, (list, tuple, set)):
+        if len(key) == 1:
+            return key[0] in DANGEROUS_KEYS if isinstance(key, (list, tuple)) else next(iter(key)) in DANGEROUS_KEYS
+        return False
     return key in DANGEROUS_KEYS
