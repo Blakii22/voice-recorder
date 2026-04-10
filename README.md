@@ -1,6 +1,16 @@
 # VoiceNote 🎙️
 
 Push-to-talk voice recorder → automatic transcription (faster-whisper) → Google Sheets via n8n.
+Designed as an internal company tool, fully localized and configured out-of-the-box.
+
+---
+
+## Features
+
+- **Instant Localization**: Fully supports Polish, Ukrainian, and English. Change languages on the fly instantly from the setup menu or system tray.
+- **Visual Loading & Downloads**: Shows a sleek loading pop-up tracking the MB/s download speed of Whisper models upon first boot.
+- **Static API Configuration**: Webhook endpoints are heavily hardcoded into the source application so users do not have to manually configure them.
+- **Offline Fallback**: If the server is unreachable, locally tracked transcriptions are safely dropped into a `log.csv` file.
 
 ---
 
@@ -14,44 +24,54 @@ Push-to-talk voice recorder → automatic transcription (faster-whisper) → Goo
 
 ## Installation
 
-```bash
-cd voice-recorder
-pip install -r requirements.txt
-```
+Or just download the latest **`VoiceNote setup.exe`** from the [GitHub Releases](../../releases/latest) page and run the installer.
 
-> **First run downloads the Whisper model** (~1.5 GB for `medium`). This happens once automatically.
+> **First run downloads the Whisper model** (~1.5 GB for `medium`). This happens once automatically and you will see a download progress screen displaying the MB/s speed.
 
 ---
 
-## Running
+## Compile Manually
 
-```bash
-python main.py
-```
+To distribute this to your company's machines, install it as an instantly-booting compiled folder using PyInstaller rather than a standalone `.exe`.
 
-On first launch a setup wizard walks you through:
-1. Your name (appears in Google Sheets)
-2. Your push-to-talk hotkey
-3. Your microphone
-
-After setup the app lives in the **system tray**. Hold your hotkey to record, release to transcribe and send.
+1. Install PyInstaller: `py -m pip install pyinstaller`
+2. Fetch the path of your customtkinter library: `py -c "import customtkinter; import site; print(customtkinter.__file__)"`
+3. Compile the app into the `/dist/main` folder: 
+   ```bash
+   py -m PyInstaller --noconfirm --onedir --windowed --add-data "[YOUR_CTK_PATH];customtkinter/" main.py
+   ```
+4. Use **Inno Setup** to wrap the resulting `dist/main` folder into an automated installation wizard!
 
 ---
 
-## Configuring n8n
+## Running Locally
+
+```bash
+py main.py
+```
+
+On first launch, a highly visual setup wizard walks you through:
+1. **Language Check**: Choose between PL / UK / EN.
+2. **Your name** (appears in Google Sheets).
+3. **Your push-to-talk hotkey** (recommended: Right Ctrl).
+4. **Your microphone** & Audio Test.
+
+After setup, the app lives out of the way in the **Windows system tray**. Hold your hotkey to record, release to transcribe and send!
+
+---
+
+## Configuring the n8n Hook
 
 ### 1. Set up the webhook URL and API key
 
-Open `config.json` (created after first run) and fill in:
+Unlike older versions, the webhook configuration is statically compiled into the source codebase to prevent user error. 
 
-```json
-{
-  "webhook_url": "https://YOUR_N8N_SERVER/webhook/YOUR_WEBHOOK_ID",
-  "webhook_api_key": "YOUR_SECRET_KEY"
-}
+Before running or distributing the app, open **`sender.py`** and alter these lines at the top:
+
+```python
+N8N_WEBHOOK_URL = "https://YOUR_N8N_SERVER/webhook/YOUR_WEBHOOK_ID"
+N8N_API_KEY = "YOUR_SECRET_KEY"
 ```
-
-Or open Settings from the tray icon.
 
 ### 2. Create the n8n workflow
 
@@ -61,8 +81,7 @@ In your n8n instance:
    - Method: `POST`
    - Authentication: `Header Auth`
    - Header name: `X-API-Key`
-   - Header value: *(same key as above)*
-   - Copy the webhook URL into `config.json`
+   - Header value: *(match the secret key from `sender.py`)*
 
 2. **Add a Google Sheets node** → *Append Row*
    - Spreadsheet: *(your sheet)*
@@ -88,23 +107,11 @@ In your n8n instance:
 
 ---
 
-## Offline fallback
-
-If the webhook is unreachable every transcription is still saved to **`log.csv`** in the app folder:
-
-| timestamp | speaker | text | sent_to_n8n |
-|-----------|---------|------|-------------|
-| 2026-04-08T14:30:00 | Jan Kowalski | Transkrypcja… | no |
-
-Open it from *Tray → View Log*.
-
----
-
 ## Changing settings later
 
-Right-click the tray icon → **Open Settings** to change your name, webhook URL, API key, or model size.
+Right-click the VoiceNote tray icon → **Open Settings** to change your name, model size, or interface language.
 
-To re-run the audio device wizard, delete `config.json` and restart.
+To re-run the complete setup and microphone pairing wizard, delete your `config.json` file and restart.
 
 ---
 
@@ -117,8 +124,6 @@ To re-run the audio device wizard, delete `config.json` and restart.
 | **medium** (default) | 5 GB | OK | Very good |
 | large-v3 | 10 GB | Slow on CPU | Best |
 
-Change via Settings or edit `config.json` → `"model_size"`.
-
 ---
 
 ## Troubleshooting
@@ -127,6 +132,6 @@ Change via Settings or edit `config.json` → `"model_size"`.
 
 **No sound detected** — check that the mic is not muted in Windows sound settings.
 
-**Transcription is slow** — switch to a smaller model or use a machine with a GPU.
+**Transcription is slow** — switch to a smaller `small` model in Settings or use a machine with a GPU.
 
-**Webhook errors** — check n8n logs; verify the URL and API key match exactly.
+**Webhook errors** — check n8n logs; verify your constants in `sender.py` match perfectly.
