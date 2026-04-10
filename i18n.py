@@ -1,0 +1,172 @@
+"""Internationalization support for VoiceNote UI."""
+
+_current_lang = "pl"
+_subscribers = []
+
+TRANSLATIONS = {
+    "en": {
+        "setup_title": "VoiceNote — Setup",
+        "quick_setup": "Quick setup — takes under a minute",
+        "back": "← Back",
+        "next": "Next →",
+        "start_app": "✓  Start App",
+        "step1_title": "What's your name?",
+        "step1_desc": "This will appear next to every transcription in Google Sheets.",
+        "step1_placeholder": "e.g. Jan Kowalski",
+        "step1_err_empty": "⚠  Please enter your name.",
+        "step1_err_short": "⚠  Name is too short.",
+        "step2_title": "Set your push-to-talk key",
+        "step2_desc": "Hold this key while speaking. Released = transcription starts.",
+        "step2_btn": "🎹  Click here, then press a key…",
+        "step2_no_key": "No key selected yet.",
+        "step2_warn_no_key": "⚠  Please capture a hotkey first.",
+        "step2_listening": "🔴  Listening — press any key…",
+        "step2_waiting": "Waiting for key press…",
+        "step2_selected": "Selected: {name}",
+        "step2_change": "✓  {name}  — click to change",
+        "step2_tip": "💡 Recommended: Right Ctrl, Scroll Lock, F9 — rarely conflicts with other shortcuts.",
+        "step2_warn_common": "⚠  {name} is a common key that may interfere with normal typing. Consider choosing another.",
+        "step3_title": "Choose your microphone",
+        "step3_desc": "Select the input device you'll speak into.",
+        "step3_level": "Input level",
+        "step3_test": "▶  Test (2 s)",
+        "step3_err_nodev": "⚠  Please select a device.",
+        "step3_status_active": "Active",
+        "step3_status_faint": "Faint signal",
+        "step3_status_silent": "Silent / no signal",
+        "step3_test_run": "⏱  Recording 2 s…",
+        "step3_test_ok": "✓  Sound detected (level {rms}) — microphone works!",
+        "step3_test_faint": "⚠  Very faint signal (level {rms}). Check volume.",
+        "step3_test_err": "✗  No sound detected. Is the microphone muted?",
+        "settings_title": "VoiceNote — Settings",
+        "settings_header": "Settings",
+        "settings_speaker": "Speaker name",
+        "settings_model": "Model size",
+        "settings_lang": "UI Language",
+        "settings_cancel": "Cancel",
+        "settings_save": "Save",
+        "tray_idle": "VoiceNote",
+        "tray_loading": "Model still loading, please wait…",
+        "tray_no_audio": "No audio detected — check your microphone.",
+        "tray_error": "Transcription error: {exc}",
+        "tray_saved_fail": "Saved locally (webhook error: {e})",
+    },
+    "pl": {
+        "setup_title": "VoiceNote — Konfiguracja",
+        "quick_setup": "Szybka konfiguracja — zajmie mniej niż minutę",
+        "back": "← Wstecz",
+        "next": "Dalej →",
+        "start_app": "✓  Uruchom aplikację",
+        "step1_title": "Jak masz na imię?",
+        "step1_desc": "To imię pojawi się przy każdej transkrypcji w Google Sheets.",
+        "step1_placeholder": "np. Jan Kowalski",
+        "step1_err_empty": "⚠  Proszę podać swoje imię.",
+        "step1_err_short": "⚠  Imię jest za krótkie.",
+        "step2_title": "Ustaw przycisk push-to-talk",
+        "step2_desc": "Trzymaj ten klawisz podczas mówienia. Puszczenie = start transkrypcji.",
+        "step2_btn": "🎹  Kliknij tutaj, a następnie naciśnij klawisz…",
+        "step2_no_key": "Nie wybrano jeszcze klawisza.",
+        "step2_warn_no_key": "⚠  Proszę najpierw przypisać klawisz.",
+        "step2_listening": "🔴  Nasłuchiwanie — naciśnij dowolny klawisz…",
+        "step2_waiting": "Oczekiwanie na naciśnięcie klawisza…",
+        "step2_selected": "Wybrano: {name}",
+        "step2_change": "✓  {name}  — kliknij, aby zmienić",
+        "step2_tip": "💡 Zalecane: Prawy Ctrl, Scroll Lock, F9 — rzadko kolidują z innymi skrótami.",
+        "step2_warn_common": "⚠  {name} to popularny klawisz, który może przeszkadzać w pisaniu. Rozważ powiązanie innego.",
+        "step3_title": "Wybierz mikrofon",
+        "step3_desc": "Wybierz urządzenie wejściowe, do którego będziesz mówić.",
+        "step3_level": "Poziom wejścia",
+        "step3_test": "▶  Test (2 s)",
+        "step3_err_nodev": "⚠  Proszę wybrać urządzenie.",
+        "step3_status_active": "Aktywny",
+        "step3_status_faint": "Słaby sygnał",
+        "step3_status_silent": "Cisza / brak sygnału",
+        "step3_test_run": "⏱  Nagruwanie 2 s…",
+        "step3_test_ok": "✓  Wykryto dźwięk (poziom {rms}) — mikrofon działa!",
+        "step3_test_faint": "⚠  Bardzo słaby sygnał (poziom {rms}). Sprawdź głośność.",
+        "step3_test_err": "✗  Nie wykryto dźwięku. Czy mikrofon jest wyciszony?",
+        "settings_title": "VoiceNote — Ustawienia",
+        "settings_header": "Ustawienia",
+        "settings_speaker": "Imię",
+        "settings_model": "Rozmiar modelu",
+        "settings_lang": "Język aplikacji",
+        "settings_cancel": "Anuluj",
+        "settings_save": "Zapisz",
+        "tray_idle": "VoiceNote",
+        "tray_loading": "Model jest nadal ładowany, proszę czekać…",
+        "tray_no_audio": "Nie wykryto dźwięku — sprawdź swój mikrofon.",
+        "tray_error": "Błąd transkrypcji: {exc}",
+        "tray_saved_fail": "Zapisano lokalnie (błąd webhooka: {e})",
+    },
+    "uk": {
+        "setup_title": "VoiceNote — Налаштування",
+        "quick_setup": "Швидке налаштування — займе менше хвилини",
+        "back": "← Назад",
+        "next": "Далі →",
+        "start_app": "✓  Запустити додаток",
+        "step1_title": "Як вас звати?",
+        "step1_desc": "Це ім'я з'являтиметься біля кожної транскрипції в Google Sheets.",
+        "step1_placeholder": "напр. Тарас Шевченко",
+        "step1_err_empty": "⚠  Будь ласка, введіть своє ім'я.",
+        "step1_err_short": "⚠  Ім'я занадто коротке.",
+        "step2_title": "Встановіть клавішу push-to-talk",
+        "step2_desc": "Утримуйте цю клавішу під час розмови. Відпускання = початок транскрипції.",
+        "step2_btn": "🎹  Натисніть тут, потім натисніть клавішу…",
+        "step2_no_key": "Клавішу ще не вибрано.",
+        "step2_warn_no_key": "⚠  Спочатку виберіть клавішу.",
+        "step2_listening": "🔴  Слухаю — натисніть будь-яку клавішу…",
+        "step2_waiting": "Очікування натискання клавіші…",
+        "step2_selected": "Вибрано: {name}",
+        "step2_change": "✓  {name}  — натисніть, щоб змінити",
+        "step2_tip": "💡 Рекомендовано: Правий Ctrl, Scroll Lock, F9 — рідко конфліктують.",
+        "step2_warn_common": "⚠  {name} часто використовується. Спробуйте іншу клавішу.",
+        "step3_title": "Виберіть мікрофон",
+        "step3_desc": "Виберіть пристрій введення, в який ви будете говорити.",
+        "step3_level": "Рівень входу",
+        "step3_test": "▶  Тест (2 с)",
+        "step3_err_nodev": "⚠  Будь ласка, виберіть пристрій.",
+        "step3_status_active": "Активний",
+        "step3_status_faint": "Слабкий сигнал",
+        "step3_status_silent": "Тиша / немає сигналу",
+        "step3_test_run": "⏱  Запис 2 с…",
+        "step3_test_ok": "✓  Звук виявлено (рівень {rms}) — мікрофон працює!",
+        "step3_test_faint": "⚠  Дуже слабкий сигнал (рівень {rms}). Перевірте гучність.",
+        "step3_test_err": "✗  Звук не виявлено. Мікрофон вимкнено?",
+        "settings_title": "VoiceNote — Налаштування",
+        "settings_header": "Налаштування",
+        "settings_speaker": "Ім'я",
+        "settings_model": "Розмір моделі",
+        "settings_lang": "Мова інтерфейсу",
+        "settings_cancel": "Скасувати",
+        "settings_save": "Зберегти",
+        "tray_idle": "VoiceNote",
+        "tray_loading": "Модель ще завантажується, будь ласка, зачекайте…",
+        "tray_no_audio": "Звук не виявлено — перевірте мікрофон.",
+        "tray_error": "Помилка транскрипції: {exc}",
+        "tray_saved_fail": "Збережено локально (помилка webhook: {e})",
+    }
+}
+
+def set_language(lang: str):
+    global _current_lang
+    if lang in TRANSLATIONS:
+        _current_lang = lang
+        for cb in _subscribers:
+            cb()
+
+def get_language() -> str:
+    return _current_lang
+
+def subscribe(callback):
+    if callback not in _subscribers:
+        _subscribers.append(callback)
+
+def unsubscribe(callback):
+    if callback in _subscribers:
+        _subscribers.remove(callback)
+
+def t(key: str, **kwargs) -> str:
+    text = TRANSLATIONS.get(_current_lang, TRANSLATIONS["en"]).get(key, key)
+    if kwargs:
+        return text.format(**kwargs)
+    return text

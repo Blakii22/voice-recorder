@@ -1,8 +1,29 @@
 """Speech-to-text via faster-whisper, loaded once at startup."""
 import logging
 import threading
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
+
+# Global callback for tqdm interception
+_progress_callback: Optional[Callable[[str, any], None]] = None
+
+# Monkey-patch tqdm to intercept huggingface_hub downloads
+import huggingface_hub.utils._tqdm as hf_tqdm
+_orig_tqdm = hf_tqdm.tqdm
+
+class TqdmInterceptor(_orig_tqdm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if _progress_callback:
+            _progress_callback("desc", self.desc or "Downloading...")
+            
+    def update(self, n=1):
+        super().update(n)
+        if _progress_callback:
+            _progress_callback("update", (self.n, self.total))
+
+hf_tqdm.tqdm = TqdmInterceptor
 
 
 class Transcriber:
@@ -18,12 +39,26 @@ class Transcriber:
     # Loading
     # ------------------------------------------------------------------
 
-    def load_async(self, on_ready=None, on_error=None):
+    def load_async(self, on_progress=None, on_ready=None, on_error=None):
         """Start loading the Whisper model in a background thread."""
+        global _progress_callback
+        _progress_callback = on_progress
 
         def _load():
             try:
+                if on_progress:
+                    on_progress("status", "Checking model files...")
+                    
                 logger.info(f"Loading faster-whisper [{self.model_size}] …")
+                
+                # First download/ensure model exists using huggingface hub
+                from faster_whisper.utils import download_model
+                
+                download_model(self.model_size)
+                
+                if on_progress:
+                    on_progress("status", "Loading model to memory...")
+                
                 from faster_whisper import WhisperModel
                 model = WhisperModel(
                     self.model_size, device="auto", compute_type="int8"
@@ -40,6 +75,9 @@ class Transcriber:
                 logger.error(f"Model load failed: {exc}")
                 if on_error:
                     on_error(exc)
+            finally:
+                global _progress_callback
+                _progress_callback = None
 
         threading.Thread(target=_load, daemon=True, name="WhisperLoader").start()
 

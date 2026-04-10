@@ -10,7 +10,8 @@ import httpx
 logger = logging.getLogger(__name__)
 LOG_PATH = Path("log.csv")
 
-_PLACEHOLDER_MARKER = "[YOUR_N8N_SERVER_ADDRESS]"
+N8N_WEBHOOK_URL = "https://n8n.emanager.pro/webhook/voicenote"
+N8N_API_KEY = ""
 
 
 def _ensure_csv_headers():
@@ -28,8 +29,6 @@ def _append_csv(speaker: str, text: str, timestamp: str, sent: bool):
 def send_transcription(
     speaker: str,
     text: str,
-    webhook_url: str,
-    api_key: str = "",
     on_success=None,
     on_failure=None,
 ):
@@ -40,7 +39,7 @@ def send_transcription(
         payload = {"speaker": speaker, "text": text, "timestamp": ts}
 
         # Skip if placeholder not yet configured
-        if not webhook_url or _PLACEHOLDER_MARKER in webhook_url:
+        if not N8N_WEBHOOK_URL or "[YOUR_N8N_WEBHOOK_URL]" in N8N_WEBHOOK_URL:
             logger.warning("Webhook URL not configured — saving locally only.")
             _append_csv(speaker, text, ts, sent=False)
             if on_failure:
@@ -48,11 +47,11 @@ def send_transcription(
             return
 
         headers = {"Content-Type": "application/json"}
-        if api_key and "[YOUR_API_KEY_HERE]" not in api_key:
-            headers["X-API-Key"] = api_key
+        if N8N_API_KEY and "[YOUR_API_KEY_HERE]" not in N8N_API_KEY:
+            headers["X-API-Key"] = N8N_API_KEY
 
         try:
-            r = httpx.post(webhook_url, json=payload, headers=headers, timeout=10.0)
+            r = httpx.post(N8N_WEBHOOK_URL, json=payload, headers=headers, timeout=10.0)
             r.raise_for_status()
             logger.info(f"Sent ✓  {speaker}: {text[:60]!r}")
             _append_csv(speaker, text, ts, sent=True)

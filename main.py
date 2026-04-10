@@ -20,6 +20,8 @@ from sender import send_transcription
 from transcriber import Transcriber
 from tray_app import TrayApp
 from utils import deserialize_key
+from i18n import t, set_language, get_language, subscribe, unsubscribe
+from ui.loading_screen import ModelLoadingWindow
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -58,10 +60,9 @@ def save_config(cfg: dict):
 # ---------------------------------------------------------------------------
 
 def open_settings_window(root: ctk.CTk, config: dict, on_saved):
-    """Simple settings editor: name, webhook URL, API key, model size."""
+    """Simple settings editor: name, model size, language."""
     win = ctk.CTkToplevel(root)
-    win.title("VoiceNote — Settings")
-    win.geometry("480x500")
+    win.geometry("480x420")
     win.resizable(False, False)
     win.configure(fg_color="#0d0d14")
     win.grab_set()
@@ -74,51 +75,90 @@ def open_settings_window(root: ctk.CTk, config: dict, on_saved):
     TEXT    = "#e3e5e8"
     MUTED   = "#72767d"
 
-    def row(label, widget_factory):
+    labels = {}
+
+    def row(key, widget_factory):
         f = ctk.CTkFrame(win, fg_color=BG)
         f.pack(fill="x", padx=28, pady=(0, 14))
-        ctk.CTkLabel(f, text=label, font=ctk.CTkFont(size=12), text_color=MUTED).pack(anchor="w")
+        lbl = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=12), text_color=MUTED)
+        lbl.pack(anchor="w")
+        labels[key] = lbl
         w = widget_factory(f)
         w.pack(fill="x", pady=(4, 0))
         return w
 
-    ctk.CTkLabel(win, text="Settings", font=ctk.CTkFont(size=18, weight="bold"),
-                 text_color=TEXT).pack(anchor="w", padx=28, pady=(28, 20))
+    lbl_title_main = ctk.CTkLabel(win, text="", font=ctk.CTkFont(size=18, weight="bold"),
+                                  text_color=TEXT)
+    lbl_title_main.pack(anchor="w", padx=28, pady=(28, 20))
 
-    kw = dict(height=40, corner_radius=10, fg_color=S2, border_color=S2,
-              font=ctk.CTkFont(size=12))
+    kw = dict(height=40, corner_radius=10, fg_color=S2, border_color=S2, font=ctk.CTkFont(size=12))
 
-    name_e   = row("Speaker name",    lambda p: ctk.CTkEntry(p, **kw))
-    url_e    = row("n8n Webhook URL", lambda p: ctk.CTkEntry(p, **kw))
-    key_e    = row("API Key",         lambda p: ctk.CTkEntry(p, show="•", **kw))
-    model_cb = row("Model size", lambda p: ctk.CTkComboBox(
+    name_e = row("settings_speaker", lambda p: ctk.CTkEntry(p, **kw))
+    
+    model_cb = row("settings_model", lambda p: ctk.CTkComboBox(
         p, values=["tiny", "base", "small", "medium", "large-v3"],
         height=40, corner_radius=10, fg_color=S2, border_color=S2,
         dropdown_fg_color=S2, font=ctk.CTkFont(size=12)))
+        
+    LANG_MAP = {"pl": "Polski 🇵🇱", "uk": "Українська 🇺🇦", "en": "English 🇬🇧"}
+    INV_LANG_MAP = {v: k for k, v in LANG_MAP.items()}
+    
+    def on_lang_change(val):
+        code = INV_LANG_MAP.get(val, "pl")
+        set_language(code)
 
-    name_e.insert(0,   config.get("speaker_name", ""))
-    url_e.insert(0,    config.get("webhook_url", ""))
-    key_e.insert(0,    config.get("webhook_api_key", ""))
-    model_cb.set(      config.get("model_size", "medium"))
+    lang_cb = row("settings_lang", lambda p: ctk.CTkComboBox(
+        p, values=list(LANG_MAP.values()),
+        height=40, corner_radius=10, fg_color=S2, border_color=S2,
+        dropdown_fg_color=S2, font=ctk.CTkFont(size=12), command=on_lang_change))
+
+    name_e.insert(0, config.get("speaker_name", ""))
+    model_cb.set(config.get("model_size", "medium"))
+    current_lang = get_language()
+    lang_cb.set(LANG_MAP.get(current_lang, LANG_MAP["pl"]))
+
+    btn_row = ctk.CTkFrame(win, fg_color=BG)
+    btn_row.pack(fill="x", padx=28, pady=(10, 28))
+    btn_cancel = ctk.CTkButton(btn_row, text="", width=100, height=38, corner_radius=10,
+                  fg_color=S2, hover_color=S2, text_color=MUTED,
+                  command=lambda: (win.grab_release(), win.destroy()))
+    btn_cancel.pack(side="left")
+    
+    btn_save = ctk.CTkButton(btn_row, text="", width=120, height=38, corner_radius=10,
+                  fg_color=ACCENT, font=ctk.CTkFont(size=13, weight="bold"))
+    btn_save.pack(side="right")
+
+    def _update_texts():
+        win.title(t("settings_title"))
+        lbl_title_main.configure(text=t("settings_header"))
+        for key, lbl in labels.items():
+            lbl.configure(text=t(key))
+        btn_cancel.configure(text=t("settings_cancel"))
+        btn_save.configure(text=t("settings_save"))
+
+    subscribe(_update_texts)
+    _update_texts()
 
     def _save():
-        config["speaker_name"]   = name_e.get().strip()
-        config["webhook_url"]    = url_e.get().strip()
-        config["webhook_api_key"]= key_e.get().strip()
-        config["model_size"]     = model_cb.get()
+        unsubscribe(_update_texts)
+        config["speaker_name"] = name_e.get().strip()
+        config["model_size"] = model_cb.get()
+        config["ui_language"] = INV_LANG_MAP.get(lang_cb.get(), "pl")
         save_config(config)
         on_saved()
         win.grab_release()
         win.destroy()
-
-    btn_row = ctk.CTkFrame(win, fg_color=BG)
-    btn_row.pack(fill="x", padx=28, pady=(10, 28))
-    ctk.CTkButton(btn_row, text="Cancel", width=100, height=38, corner_radius=10,
-                  fg_color=S2, hover_color=S2, text_color=MUTED,
-                  command=lambda: (win.grab_release(), win.destroy())).pack(side="left")
-    ctk.CTkButton(btn_row, text="Save", width=120, height=38, corner_radius=10,
-                  fg_color=ACCENT, font=ctk.CTkFont(size=13, weight="bold"),
-                  command=_save).pack(side="right")
+        
+    def _cancel():
+        # Revert language preview
+        set_language(config.get("ui_language", "pl"))
+        unsubscribe(_update_texts)
+        win.grab_release()
+        win.destroy()
+        
+    btn_cancel.configure(command=_cancel)
+    btn_save.configure(command=_save)
+    win.protocol("WM_DELETE_WINDOW", _cancel)
 
 
 # ---------------------------------------------------------------------------
@@ -126,11 +166,16 @@ def open_settings_window(root: ctk.CTk, config: dict, on_saved):
 # ---------------------------------------------------------------------------
 
 def main():
+    config = load_config()
+    if config:
+        set_language(config.get("ui_language", "pl"))
+    else:
+        set_language("pl")
+
     ctk.set_appearance_mode("dark")
     ctk.set_default_color_theme("blue")
 
     # ── Phase 1: first-run wizard ──────────────────────────────────────────
-    config = load_config()
 
     if not config or not config.get("speaker_name"):
         from ui.setup_wizard import SetupWizard
@@ -141,42 +186,56 @@ def main():
             logger.info("Setup cancelled — exiting.")
             sys.exit(0)
         save_config(config)
+        # Apply the selected language immediately
+        set_language(config.get("ui_language", "pl"))
 
     # ── Phase 2: validate stored device ────────────────────────────────────
     device_index: int = config.get("audio_device_index", 0)
     ok, err = validate_device(device_index)
     if not ok:
         logger.warning(f"Stored device #{device_index} failed: {err}")
-        # We'll handle this below via the hidden root + dialog
 
-    # ── Phase 3: start services ────────────────────────────────────────────
-    transcriber = Transcriber(config.get("model_size", "medium"),
-                              config.get("language", "pl"))
-
-    action_q: queue.Queue = queue.Queue()
-    tray = TrayApp(action_q)
+    # ── Phase 3: hidden CTk root (keeps tkinter alive) ─────────────────────
+    root = ctk.CTk()
+    root.withdraw()
+    root.title(t("tray_idle"))
 
     # Start tray in background thread
+    action_q: queue.Queue = queue.Queue()
+    tray = TrayApp(action_q)
     tray_thread = threading.Thread(target=tray.run, daemon=True, name="TrayThread")
     tray_thread.start()
 
     recorder = AudioRecorder(device_index)
 
-    # Load model async; update tray when ready
+    # ── Phase 4: load transcriber and show loading window ──────────────────
+    loading_win = ModelLoadingWindow(root, config.get("model_size", "medium"))
+
+    transcriber = Transcriber(config.get("model_size", "medium"),
+                              "pl") # Always use polish for whisper recognition as requested initially or update?
+
+    def _on_progress(event_type, data):
+        # Must schedule GUI updates on the main thread
+        if event_type == "status":
+            root.after(0, lambda d=data: loading_win.set_status(d))
+        elif event_type == "desc":
+            root.after(0, lambda d=data: loading_win.set_status(d))
+        elif event_type == "update":
+            downloaded, total = data
+            root.after(0, lambda d=downloaded, t=total: loading_win.set_progress(d, t))
+
     def _model_ready():
+        root.after(0, loading_win.destroy)
         tray.set_state("idle")
         logger.info("Model ready — app idle.")
 
     def _model_error(exc):
+        root.after(0, lambda: loading_win.set_status(f"Error: {exc}"))
         tray.set_state("error")
         logger.error(f"Model load error: {exc}")
 
-    transcriber.load_async(on_ready=_model_ready, on_error=_model_error)
-
-    # ── Phase 4: hidden CTk root (keeps tkinter alive for dialogs) ─────────
-    root = ctk.CTk()
-    root.withdraw()
-    root.title("VoiceNote")
+    # Start transcriber background load
+    transcriber.load_async(on_progress=_on_progress, on_ready=_model_ready, on_error=_model_error)
 
     # Show device error dialog on startup if device is bad
     if not ok:
@@ -193,7 +252,7 @@ def main():
     def _on_press(key):
         if key == target_key and not _recording_active.is_set():
             if not transcriber.is_ready():
-                tray.notify("VoiceNote", "Model still loading, please wait…")
+                tray.notify(t("tray_idle"), t("tray_loading"))
                 return
             _recording_active.set()
             ok2, err2 = recorder.start()
@@ -214,7 +273,7 @@ def main():
                 return
             if status in ("silent", "empty"):
                 tray.set_state("idle")
-                tray.notify("VoiceNote", "No audio detected — check your microphone.")
+                tray.notify(t("tray_idle"), t("tray_no_audio"))
                 root.after(0, lambda: _prompt_device(root, config, recorder))
                 return
 
@@ -227,7 +286,7 @@ def main():
                 except Exception as exc:
                     logger.error(f"Transcription failed: {exc}")
                     tray.set_state("error")
-                    tray.notify("VoiceNote", f"Transcription error: {exc}")
+                    tray.notify(t("tray_idle"), t("tray_error", exc=str(exc)[:40]))
                     return
                 finally:
                     try:
@@ -238,12 +297,10 @@ def main():
                 send_transcription(
                     speaker=config["speaker_name"],
                     text=text,
-                    webhook_url=config.get("webhook_url", ""),
-                    api_key=config.get("webhook_api_key", ""),
                     on_success=lambda: tray.set_state("sent"),
                     on_failure=lambda e: (
                         tray.set_state("idle"),
-                        tray.notify("VoiceNote", f"Saved locally (webhook error: {e})"),
+                        tray.notify(t("tray_idle"), t("tray_saved_fail", e=str(e)[:40])),
                     ),
                 )
                 # Return to idle after a short pause

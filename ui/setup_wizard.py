@@ -1,6 +1,6 @@
 """
 Three-step first-run setup wizard built with CustomTkinter.
-  Step 1 — Speaker name
+  Step 1 — Speaker name + Language Selector
   Step 2 — Hotkey capture
   Step 3 — Audio device picker with live level meter + test
 """
@@ -13,6 +13,7 @@ import sounddevice as sd
 
 from recorder import get_input_devices, validate_device, SAMPLE_RATE
 from utils import serialize_key, format_key_name, is_dangerous_key
+from i18n import t, set_language, get_language, subscribe, unsubscribe
 
 
 # ── Colour tokens ────────────────────────────────────────────────────────────
@@ -42,8 +43,8 @@ class SetupWizard(ctk.CTk):
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
 
-        self.title("VoiceNote — Setup")
-        self.geometry("500x560")
+        self.title("VoiceNote")
+        self.geometry("500x620")
         self.resizable(False, False)
         self.configure(fg_color=BG)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -61,7 +62,65 @@ class SetupWizard(ctk.CTk):
 
         self._build_chrome()
         self._build_steps()
+        
+        subscribe(self._update_texts)
+        self._update_texts()
         self._show_step(0)
+
+    # ── Text update logic ───────────────────────────────────────────────────
+    def _update_texts(self):
+        self.title(t("setup_title"))
+        self._lbl_quick.configure(text=t("quick_setup"))
+        
+        # Nav buttons
+        self._back_btn.configure(text=t("back"))
+        if self._step == self.STEPS - 1:
+            self._next_btn.configure(text=t("start_app"))
+        else:
+            self._next_btn.configure(text=t("next"))
+            
+        # Step 1
+        self._lbl_s1_t.configure(text=t("step1_title"))
+        self._lbl_s1_d.configure(text=t("step1_desc"))
+        self._name_entry.configure(placeholder_text=t("step1_placeholder"))
+        
+        # Step 2
+        self._lbl_s2_t.configure(text=t("step2_title"))
+        self._lbl_s2_d.configure(text=t("step2_desc"))
+        
+        if self._capturing_hotkey:
+            self._hotkey_btn.configure(text=t("step2_listening"))
+            self._hotkey_label.configure(text=t("step2_waiting"))
+        else:
+            if self._captured_key:
+                name = format_key_name(self._captured_key)
+                self._hotkey_btn.configure(text=t("step2_change", name=name))
+                self._hotkey_label.configure(text=t("step2_selected", name=name))
+                if is_dangerous_key(self._captured_key):
+                    self._hotkey_warn.configure(text=t("step2_warn_common", name=name))
+                else:
+                    self._hotkey_warn.configure(text="")
+            else:
+                self._hotkey_btn.configure(text=t("step2_btn"))
+                self._hotkey_label.configure(text=t("step2_no_key"))
+                
+        self._lbl_s2_tip.configure(text=t("step2_tip"))
+        
+        # Step 3
+        self._lbl_s3_t.configure(text=t("step3_title"))
+        self._lbl_s3_d.configure(text=t("step3_desc"))
+        self._lbl_s3_lvl.configure(text=t("step3_level"))
+        if not self._test_running:
+            self._test_btn.configure(text=t("step3_test"))
+        self._update_meter() # re-evaluate status text
+        
+        # Language buttons selection state
+        curr_lang = get_language()
+        for l, btn in self._lang_btns.items():
+            if l == curr_lang:
+                btn.configure(fg_color=ACCENT, border_color=ACCENT, text_color=TEXT)
+            else:
+                btn.configure(fg_color=SURFACE2, border_color=SURFACE2, text_color=MUTED)
 
     # ── Chrome (header + dots + nav) ─────────────────────────────────────────
 
@@ -71,8 +130,8 @@ class SetupWizard(ctk.CTk):
         hdr.pack(fill="x", padx=36, pady=(32, 0))
         ctk.CTkLabel(hdr, text="🎙️  VoiceNote", font=ctk.CTkFont(size=22, weight="bold"),
                      text_color=TEXT).pack(anchor="w")
-        ctk.CTkLabel(hdr, text="Quick setup — takes under a minute",
-                     font=ctk.CTkFont(size=12), text_color=MUTED).pack(anchor="w", pady=(2, 0))
+        self._lbl_quick = ctk.CTkLabel(hdr, text="", font=ctk.CTkFont(size=12), text_color=MUTED)
+        self._lbl_quick.pack(anchor="w", pady=(2, 0))
 
         # Progress dots
         dot_row = ctk.CTkFrame(self, fg_color=BG)
@@ -96,13 +155,13 @@ class SetupWizard(ctk.CTk):
         nav = ctk.CTkFrame(self, fg_color=BG)
         nav.pack(fill="x", padx=36, pady=(0, 28))
         self._back_btn = ctk.CTkButton(
-            nav, text="← Back", width=100, height=38,
+            nav, text="", width=100, height=38,
             fg_color=SURFACE2, hover_color=SURFACE, text_color=MUTED,
             corner_radius=10, command=self._prev
         )
         self._back_btn.pack(side="left")
         self._next_btn = ctk.CTkButton(
-            nav, text="Next →", width=130, height=38,
+            nav, text="", width=130, height=38,
             fg_color=ACCENT, hover_color=ACCENT_H,
             corner_radius=10, font=ctk.CTkFont(size=13, weight="bold"),
             command=self._next
@@ -118,72 +177,80 @@ class SetupWizard(ctk.CTk):
             builder(f)
             self._frames.append(f)
 
-    # Step 1 — name -----------------------------------------------------------
+    # Step 1 — name + language -----------------------------------------------------------
 
     def _build_step1(self, f: ctk.CTkFrame):
-        ctk.CTkLabel(f, text="What's your name?", font=ctk.CTkFont(size=15, weight="bold"),
-                     text_color=TEXT).pack(anchor="w", padx=28, pady=(28, 4))
-        ctk.CTkLabel(f, text="This will appear next to every transcription in Google Sheets.",
+        self._lbl_s1_t = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=15, weight="bold"),
+                     text_color=TEXT)
+        self._lbl_s1_t.pack(anchor="w", padx=28, pady=(28, 4))
+        self._lbl_s1_d = ctk.CTkLabel(f, text="",
                      font=ctk.CTkFont(size=12), text_color=MUTED, wraplength=380,
-                     justify="left").pack(anchor="w", padx=28)
+                     justify="left")
+        self._lbl_s1_d.pack(anchor="w", padx=28)
 
         self._name_var = ctk.StringVar()
         self._name_entry = ctk.CTkEntry(
-            f, textvariable=self._name_var, placeholder_text="e.g. Jan Kowalski",
+            f, textvariable=self._name_var,
             height=44, corner_radius=10, font=ctk.CTkFont(size=13),
             fg_color=SURFACE2, border_color=SURFACE2, border_width=1
         )
         self._name_entry.pack(fill="x", padx=28, pady=(16, 0))
 
-        self._name_err = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=11),
-                                      text_color=DANGER)
+        self._name_err = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=11), text_color=DANGER)
         self._name_err.pack(anchor="w", padx=28, pady=(6, 0))
+        
+        # Languages
+        lang_frame = ctk.CTkFrame(f, fg_color=SURFACE)
+        lang_frame.pack(fill="x", padx=28, pady=(24, 0))
+        
+        langs = [("pl", "Polski 🇵🇱"), ("uk", "Українська 🇺🇦"), ("en", "English 🇬🇧")]
+        self._lang_btns = {}
+        for code, label in langs:
+            btn = ctk.CTkButton(
+                lang_frame, text=label, height=50, corner_radius=10,
+                border_width=2,
+                command=lambda c=code: set_language(c)
+            )
+            btn.pack(side="left", expand=True, fill="x", padx=4)
+            self._lang_btns[code] = btn
 
     # Step 2 — hotkey ---------------------------------------------------------
 
     def _build_step2(self, f: ctk.CTkFrame):
-        ctk.CTkLabel(f, text="Set your push-to-talk key",
-                     font=ctk.CTkFont(size=15, weight="bold"), text_color=TEXT
-                     ).pack(anchor="w", padx=28, pady=(28, 4))
-        ctk.CTkLabel(f,
-                     text="Hold this key while speaking. Released = transcription starts.",
-                     font=ctk.CTkFont(size=12), text_color=MUTED, wraplength=380,
-                     justify="left").pack(anchor="w", padx=28)
+        self._lbl_s2_t = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=15, weight="bold"), text_color=TEXT)
+        self._lbl_s2_t.pack(anchor="w", padx=28, pady=(28, 4))
+        
+        self._lbl_s2_d = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=12), text_color=MUTED, wraplength=380, justify="left")
+        self._lbl_s2_d.pack(anchor="w", padx=28)
 
         self._hotkey_btn = ctk.CTkButton(
-            f, text="🎹  Click here, then press a key…",
-            height=52, corner_radius=10, font=ctk.CTkFont(size=13),
+            f, text="", height=52, corner_radius=10, font=ctk.CTkFont(size=13),
             fg_color=SURFACE2, hover_color=SURFACE, text_color=TEXT,
             command=self._start_hotkey_capture
         )
         self._hotkey_btn.pack(fill="x", padx=28, pady=(20, 0))
 
-        self._hotkey_label = ctk.CTkLabel(f, text="No key selected yet.",
-                                          font=ctk.CTkFont(size=12), text_color=MUTED)
+        self._hotkey_label = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=12), text_color=MUTED)
         self._hotkey_label.pack(anchor="w", padx=28, pady=(10, 0))
 
-        self._hotkey_warn = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=11),
-                                         text_color=WARNING, wraplength=380, justify="left")
+        self._hotkey_warn = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=11), text_color=WARNING, wraplength=380, justify="left")
         self._hotkey_warn.pack(anchor="w", padx=28, pady=(4, 0))
 
-        ctk.CTkLabel(f,
-                     text="💡 Recommended: Right Ctrl, Scroll Lock, F9 — rarely conflicts with other shortcuts.",
-                     font=ctk.CTkFont(size=11), text_color=MUTED, wraplength=380,
-                     justify="left").pack(anchor="w", padx=28, pady=(16, 0))
+        self._lbl_s2_tip = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=11), text_color=MUTED, wraplength=380, justify="left")
+        self._lbl_s2_tip.pack(anchor="w", padx=28, pady=(16, 0))
 
     # Step 3 — device ---------------------------------------------------------
 
     def _build_step3(self, f: ctk.CTkFrame):
-        ctk.CTkLabel(f, text="Choose your microphone",
-                     font=ctk.CTkFont(size=15, weight="bold"), text_color=TEXT
-                     ).pack(anchor="w", padx=28, pady=(28, 4))
-        ctk.CTkLabel(f, text="Select the input device you'll speak into.",
-                     font=ctk.CTkFont(size=12), text_color=MUTED
-                     ).pack(anchor="w", padx=28)
+        self._lbl_s3_t = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=15, weight="bold"), text_color=TEXT)
+        self._lbl_s3_t.pack(anchor="w", padx=28, pady=(28, 4))
+        
+        self._lbl_s3_d = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=12), text_color=MUTED)
+        self._lbl_s3_d.pack(anchor="w", padx=28)
 
         # Device dropdown
         self._device_var = ctk.StringVar(value="")
-        self._device_map: dict[str, int] = {}  # label → device index
+        self._device_map: dict[str, int] = {}
         self._device_combo = ctk.CTkComboBox(
             f, variable=self._device_var, height=42, corner_radius=10,
             fg_color=SURFACE2, border_color=SURFACE2, dropdown_fg_color=SURFACE2,
@@ -194,8 +261,9 @@ class SetupWizard(ctk.CTk):
         # Level meter
         meter_row = ctk.CTkFrame(f, fg_color=SURFACE)
         meter_row.pack(fill="x", padx=28, pady=(14, 0))
-        ctk.CTkLabel(meter_row, text="Input level", font=ctk.CTkFont(size=11),
-                     text_color=MUTED).pack(anchor="w")
+        self._lbl_s3_lvl = ctk.CTkLabel(meter_row, text="", font=ctk.CTkFont(size=11), text_color=MUTED)
+        self._lbl_s3_lvl.pack(anchor="w")
+        
         self._level_bar = ctk.CTkProgressBar(
             meter_row, height=12, corner_radius=6,
             fg_color=SURFACE2, progress_color=ACCENT
@@ -203,20 +271,18 @@ class SetupWizard(ctk.CTk):
         self._level_bar.set(0)
         self._level_bar.pack(fill="x", pady=(4, 0))
 
-        self._level_status = ctk.CTkLabel(meter_row, text="—",
-                                          font=ctk.CTkFont(size=11), text_color=MUTED)
+        self._level_status = ctk.CTkLabel(meter_row, text="—", font=ctk.CTkFont(size=11), text_color=MUTED)
         self._level_status.pack(anchor="w", pady=(4, 0))
 
         # Test button
         self._test_btn = ctk.CTkButton(
-            f, text="▶  Test (2 s)", height=38, corner_radius=10,
+            f, text="", height=38, corner_radius=10,
             fg_color=SURFACE2, hover_color=SURFACE, text_color=TEXT,
             font=ctk.CTkFont(size=12), command=self._run_test
         )
         self._test_btn.pack(fill="x", padx=28, pady=(14, 0))
 
-        self._test_result = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=11),
-                                         text_color=MUTED)
+        self._test_result = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=11), text_color=MUTED)
         self._test_result.pack(anchor="w", padx=28, pady=(6, 0))
 
     # ── Step navigation ──────────────────────────────────────────────────────
@@ -234,10 +300,7 @@ class SetupWizard(ctk.CTk):
         self._back_btn.configure(state="normal" if step > 0 else "disabled",
                                  text_color=TEXT if step > 0 else SURFACE2)
 
-        if step == self.STEPS - 1:
-            self._next_btn.configure(text="✓  Start App")
-        else:
-            self._next_btn.configure(text="Next →")
+        self._update_texts()
 
         # Activate step-specific logic
         if step == 2:
@@ -272,18 +335,17 @@ class SetupWizard(ctk.CTk):
     def _validate_name(self) -> bool:
         name = self._name_var.get().strip()
         if not name:
-            self._name_err.configure(text="⚠  Please enter your name.")
+            self._name_err.configure(text=t("step1_err_empty"))
             return False
         if len(name) < 2:
-            self._name_err.configure(text="⚠  Name is too short.")
+            self._name_err.configure(text=t("step1_err_short"))
             return False
         self._name_err.configure(text="")
         return True
 
     def _validate_hotkey(self) -> bool:
         if self._captured_key is None:
-            self._hotkey_warn.configure(text="⚠  Please capture a hotkey first.",
-                                        text_color=DANGER)
+            self._hotkey_warn.configure(text=t("step2_warn_no_key"), text_color=DANGER)
             return False
         self._hotkey_warn.configure(text="")
         return True
@@ -291,7 +353,7 @@ class SetupWizard(ctk.CTk):
     def _validate_device(self) -> bool:
         label = self._device_var.get()
         if label not in self._device_map:
-            self._test_result.configure(text="⚠  Please select a device.", text_color=DANGER)
+            self._test_result.configure(text=t("step3_err_nodev"), text_color=DANGER)
             return False
         self._test_result.configure(text="")
         return True
@@ -302,9 +364,9 @@ class SetupWizard(ctk.CTk):
         if self._capturing_hotkey:
             return
         self._capturing_hotkey = True
-        self._hotkey_btn.configure(text="🔴  Listening — press any key…",
-                                   fg_color=DANGER, hover_color=DANGER)
-        self._hotkey_label.configure(text="Waiting for key press…", text_color=MUTED)
+        self._hotkey_btn.configure(fg_color=DANGER, hover_color=DANGER)
+        self._hotkey_label.configure(text_color=MUTED)
+        self._update_texts()
 
         def _listen():
             from pynput import keyboard as kb
@@ -326,19 +388,18 @@ class SetupWizard(ctk.CTk):
     def _on_key_captured(self, key):
         self._capturing_hotkey = False
         self._captured_key = key
-        name = format_key_name(key)
+        
         self._hotkey_btn.configure(
-            text=f"✓  {name}  — click to change",
             fg_color=SUCCESS, hover_color="#45c96e", text_color="#0d0d14"
         )
-        self._hotkey_label.configure(text=f"Selected: {name}", text_color=SUCCESS)
+        self._hotkey_label.configure(text_color=SUCCESS)
+        
         if is_dangerous_key(key):
-            self._hotkey_warn.configure(
-                text=f"⚠  {name} is a common key that may interfere with normal typing. Consider choosing another.",
-                text_color=WARNING
-            )
+            self._hotkey_warn.configure(text_color=WARNING)
         else:
             self._hotkey_warn.configure(text="")
+        
+        self._update_texts()
 
     # ── Device handling ──────────────────────────────────────────────────────
 
@@ -399,8 +460,14 @@ class SetupWizard(ctk.CTk):
         norm = min(1.0, self._level_value * 30)
         self._level_bar.set(norm)
         color = SUCCESS if norm > 0.05 else (WARNING if norm > 0.01 else MUTED)
-        status = "Active" if norm > 0.05 else ("Faint signal" if norm > 0.01 else "Silent / no signal")
-        self._level_status.configure(text=status, text_color=color)
+        
+        if norm > 0.05:
+            self._level_status.configure(text=t("step3_status_active"), text_color=color)
+        elif norm > 0.01:
+            self._level_status.configure(text=t("step3_status_faint"), text_color=color)
+        else:
+            self._level_status.configure(text=t("step3_status_silent"), text_color=color)
+            
         self.after(60, self._update_meter)
 
     # ── 2-second test ────────────────────────────────────────────────────────
@@ -412,7 +479,7 @@ class SetupWizard(ctk.CTk):
         if idx is None:
             return
         self._test_running = True
-        self._test_btn.configure(state="disabled", text="⏱  Recording 2 s…")
+        self._test_btn.configure(state="disabled", text=t("step3_test_run"))
         self._test_result.configure(text="", text_color=MUTED)
 
         import numpy as np
@@ -424,11 +491,11 @@ class SetupWizard(ctk.CTk):
                 sd.wait()
                 rms = float(np.sqrt(np.mean(audio ** 2)))
                 if rms > 0.008:
-                    msg, col = f"✓  Sound detected (level {rms:.4f}) — microphone works!", SUCCESS
+                    msg, col = t("step3_test_ok", rms=f"{rms:.4f}"), SUCCESS
                 elif rms > 0.001:
-                    msg, col = f"⚠  Very faint signal (level {rms:.4f}). Check volume.", WARNING
+                    msg, col = t("step3_test_faint", rms=f"{rms:.4f}"), WARNING
                 else:
-                    msg, col = "✗  No sound detected. Is the microphone muted?", DANGER
+                    msg, col = t("step3_test_err"), DANGER
             except Exception as e:
                 msg, col = f"✗  Error: {e}", DANGER
 
@@ -438,12 +505,13 @@ class SetupWizard(ctk.CTk):
 
     def _test_done(self, msg: str, color: str):
         self._test_running = False
-        self._test_btn.configure(state="normal", text="▶  Test (2 s)")
+        self._test_btn.configure(state="normal", text=t("step3_test"))
         self._test_result.configure(text=msg, text_color=color)
 
     # ── Finish ───────────────────────────────────────────────────────────────
 
     def _finish(self):
+        unsubscribe(self._update_texts)
         self._stop_level_monitor()
         dev_label = self._device_var.get()
         dev_idx = self._device_map.get(dev_label, 0)
@@ -454,14 +522,13 @@ class SetupWizard(ctk.CTk):
             "hotkey_str": serialize_key(self._captured_key),
             "audio_device_index": dev_idx,
             "audio_device_name": dev_name,
-            "webhook_url": "https://[YOUR_N8N_SERVER_ADDRESS]/webhook/[YOUR_WEBHOOK_PATH]",
-            "webhook_api_key": "[YOUR_API_KEY_HERE]",
             "model_size": "medium",
-            "language": "pl",
+            "ui_language": get_language(),
         }
         self.destroy()
 
     def _on_close(self):
+        unsubscribe(self._update_texts)
         self._stop_level_monitor()
         self.result = None
         self.destroy()
