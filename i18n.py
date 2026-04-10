@@ -50,6 +50,10 @@ TRANSLATIONS = {
         "tray_no_audio": "No audio detected — check your microphone.",
         "tray_error": "Transcription error: {exc}",
         "tray_saved_fail": "Saved locally (webhook error: {e})",
+        "update_title": "Update Available",
+        "update_desc": "A new version of VoiceNote ({version}) is available! Would you like to download it now?",
+        "update_yes": "Yes, download",
+        "update_no": "Not now",
     },
     "pl": {
         "setup_title": "VoiceNote — Konfiguracja",
@@ -97,6 +101,10 @@ TRANSLATIONS = {
         "tray_no_audio": "Nie wykryto dźwięku — sprawdź swój mikrofon.",
         "tray_error": "Błąd transkrypcji: {exc}",
         "tray_saved_fail": "Zapisano lokalnie (błąd webhooka: {e})",
+        "update_title": "Dostępna aktualizacja",
+        "update_desc": "Dostępna jest nowa wersja VoiceNote ({version})! Czy chcesz ją teraz pobrać?",
+        "update_yes": "Tak, pobierz",
+        "update_no": "Nie teraz",
     },
     "uk": {
         "setup_title": "VoiceNote — Налаштування",
@@ -144,6 +152,10 @@ TRANSLATIONS = {
         "tray_no_audio": "Звук не виявлено — перевірте мікрофон.",
         "tray_error": "Помилка транскрипції: {exc}",
         "tray_saved_fail": "Збережено локально (помилка webhook: {e})",
+        "update_title": "Доступне оновлення",
+        "update_desc": "Доступна нова версія VoiceNote ({version})! Бажаєте завантажити її зараз?",
+        "update_yes": "Так, завантажити",
+        "update_no": "Не зараз",
     }
 }
 

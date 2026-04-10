@@ -145,6 +145,43 @@ def open_settings_window(root: ctk.CTk, config: dict, on_saved):
                   fg_color=ACCENT, font=ctk.CTkFont(size=13, weight="bold"))
     btn_save.pack(side="right")
 
+    # Local hotkey state for settings dialog
+    from utils import format_key_name, serialize_key, deserialize_key, is_dangerous_key
+    settings_state = {"hotkey": deserialize_key(config.get("hotkey_str", ""))}
+
+    def _start_hotkey_capture():
+        btn_hotkey.configure(text=t("step2_listening"), fg_color=ACCENT)
+        def _listen():
+            from pynput import keyboard as kb
+            captured = []
+            def on_press(key):
+                if key != kb.Key.esc:
+                    captured.append(key)
+                return False
+            with kb.Listener(on_press=on_press) as ls:
+                ls.join()
+            if captured:
+                win.after(0, lambda: _on_hotkey_captured(captured[0]))
+        import threading
+        threading.Thread(target=_listen, daemon=True).start()
+
+    def _on_hotkey_captured(key):
+        settings_state["hotkey"] = key
+        name = format_key_name(key)
+        btn_hotkey.configure(text=t("step2_change", name=name), fg_color=S2)
+
+    hk_f = ctk.CTkFrame(win, fg_color=BG)
+    hk_f.pack(fill="x", padx=28, pady=(0, 14), before=btn_row)
+    lbl_hk = ctk.CTkLabel(hk_f, text=t("step2_title"), font=ctk.CTkFont(size=12), text_color=MUTED)
+    lbl_hk.pack(anchor="w")
+    current_name = format_key_name(settings_state["hotkey"]) if settings_state["hotkey"] else "..."
+    btn_hotkey = ctk.CTkButton(
+        hk_f, text=t("step2_change", name=current_name), height=40, corner_radius=10,
+        fg_color=S2, hover_color=SURFACE, text_color=TEXT, font=ctk.CTkFont(size=12),
+        command=_start_hotkey_capture
+    )
+    btn_hotkey.pack(fill="x", pady=(4, 0))
+
     def _update_texts():
         win.title(t("settings_title"))
         lbl_title_main.configure(text=t("settings_header"))
@@ -161,6 +198,8 @@ def open_settings_window(root: ctk.CTk, config: dict, on_saved):
         config["speaker_name"] = name_e.get().strip()
         config["model_size"] = model_cb.get()
         config["ui_language"] = INV_LANG_MAP.get(lang_cb.get(), "pl")
+        if settings_state["hotkey"]:
+            config["hotkey_str"] = serialize_key(settings_state["hotkey"])
         save_config(config)
         on_saved()
         win.grab_release()
@@ -222,6 +261,10 @@ def main():
     tray = TrayApp(action_q)
     tray_thread = threading.Thread(target=tray.run, daemon=True, name="TrayThread")
     tray_thread.start()
+    
+    # ── Phase 3.5: Check for updates silently in background
+    from updater import check_for_updates
+    check_for_updates(root)
 
     recorder = AudioRecorder(device_index)
 
@@ -259,15 +302,15 @@ def main():
         root.after(500, lambda: _prompt_device(root, config, recorder))
 
     # ── Hotkey listener ────────────────────────────────────────────────────
-    target_key = deserialize_key(config.get("hotkey_str", ""))
-    if target_key is None:
+    hk_state = {"target": deserialize_key(config.get("hotkey_str", ""))}
+    if hk_state["target"] is None:
         logger.error("No valid hotkey in config — please re-run setup.")
         sys.exit(1)
 
     _recording_active = threading.Event()
 
     def _on_press(key):
-        if key == target_key and not _recording_active.is_set():
+        if key == hk_state["target"] and not _recording_active.is_set():
             if not transcriber.is_ready():
                 tray.notify(t("tray_idle"), t("tray_loading"))
                 return
@@ -281,7 +324,7 @@ def main():
             tray.set_state("recording")
 
     def _on_release(key):
-        if key == target_key and _recording_active.is_set():
+        if key == hk_state["target"] and _recording_active.is_set():
             _recording_active.clear()
             wav_path, status = recorder.stop()
 
@@ -337,8 +380,11 @@ def main():
             while True:
                 action = action_q.get_nowait()
                 if action == "open_settings":
-                    open_settings_window(root, config,
-                                         on_saved=lambda: logger.info("Settings saved."))
+                    def _on_settings_saved():
+                        logger.info("Settings saved.")
+                        # Reload hotkey
+                        hk_state["target"] = deserialize_key(config.get("hotkey_str", ""))
+                    open_settings_window(root, config, on_saved=_on_settings_saved)
                 elif action == "open_log":
                     try:
                         os.startfile("log.csv")

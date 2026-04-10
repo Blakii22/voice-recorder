@@ -1,0 +1,14 @@
+13:50:18  INFO      main — Config saved → config.json
+13:50:18  INFO      main — Hotkey registered: Key.ctrl_r
+13:50:18  INFO      transcriber — Loading faster-whisper [medium] …
+13:50:19  INFO      httpx — HTTP Request: GET https://huggingface.co/api/models/Systran/faster-whisper-medium/revision/main "HTTP/1.1 200 OK"
+13:50:19  INFO      httpx — HTTP Request: GET https://huggingface.co/api/models/Systran/faster-whisper-medium/revision/main "HTTP/1.1 200 OK"
+13:51:02  INFO      main — Hotkey registered: Key.ctrl_r
+13:51:02  INFO      transcriber — Loading faster-whisper [medium] …
+13:51:03  INFO      httpx — HTTP Request: GET https://huggingface.co/api/models/Systran/faster-whisper-medium/revision/main "HTTP/1.1 200 OK"
+13:51:03  INFO      httpx — HTTP Request: GET https://huggingface.co/api/models/Systran/faster-whisper-medium/revision/main "HTTP/1.1 200 OK"
+13:51:36  INFO      main — Config saved → config.json
+13:51:36  INFO      main — Hotkey registered: Key.ctrl_r
+13:51:36  INFO      transcriber — Loading faster-whisper [medium] …
+13:51:37  INFO      httpx — HTTP Request: GET https://huggingface.co/api/models/Systran/faster-whisper-medium/revision/main "HTTP/1.1 200 OK"
+13:51:37  INFO      httpx — HTTP Request: GET https://huggingface.co/api/models/Systran/faster-whisper-medium/revision/main "HTTP/1.1 200 OK"
