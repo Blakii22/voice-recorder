@@ -1,5 +1,7 @@
 # User-specific config (contains API keys — never commit!)
 config.json
+voicenote.log
+*.log
 
 # Local transcription log
 log.csv

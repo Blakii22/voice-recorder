@@ -8,9 +8,12 @@ Designed as an internal company tool, fully localized and configured out-of-the-
 ## Features
 
 - **Instant Localization**: Fully supports Polish, Ukrainian, and English. Change languages on the fly instantly from the setup menu or system tray.
-- **Visual Loading & Downloads**: Shows a sleek loading pop-up tracking the MB/s download speed of Whisper models upon first boot.
+- **Dual Hotkey Modes**: Set both a **Push-to-Talk** hotkey (hold to record) AND a **Toggle** hotkey (click start, click stop) running simultaneously on the exact same app.
+- **Auto Update Checker**: Background watcher automatically checks GitHub for newer releases and drops an un-intrusive popup if your build is outdated.
+- **Zero-Permission I/O Validation**: The entire app runs flawlessly without needing System Administrator permissions natively off any drive by locally mirroring logs and settings straight to `C:\Users\[User]\Documents\VoiceNote\`.
+- **Smart Hardware Fail-safes**: Deep runtime CUDA swap testing dynamically routes high-performance GPU tasks to the standard CPU securely on older machines or machines missing driver toolkits.
 - **Static API Configuration**: Webhook endpoints are heavily hardcoded into the source application so users do not have to manually configure them.
-- **Offline Fallback**: If the server is unreachable, locally tracked transcriptions are safely dropped into a `log.csv` file.
+- **Offline Fallback**: If the server is unreachable, locally tracked transcriptions are safely dropped into a local `log.csv` file.
 
 ---
 
@@ -30,20 +33,6 @@ Just download the latest **`VoiceNote setup.exe`** from the [GitHub Releases](..
 
 ---
 
-## Or compile Manually!
-
-To distribute this to your company's machines, install it as an instantly-booting compiled folder using PyInstaller rather than a standalone `.exe`.
-
-1. Install PyInstaller: `py -m pip install pyinstaller`
-2. Fetch the path of your customtkinter library: `py -c "import customtkinter; import site; print(customtkinter.__file__)"`
-3. Compile the app into the `/dist/main` folder: 
-   ```bash
-   py -m PyInstaller --noconfirm --onedir --windowed --add-data "[YOUR_CTK_PATH];customtkinter/" main.py
-   ```
-4. Use **Inno Setup** to wrap the resulting `dist/main` folder into an automated installation wizard!
-
----
-
 ## Running Locally
 
 ```bash
@@ -52,11 +41,25 @@ py main.py
 
 On first launch, a highly visual setup wizard walks you through:
 1. **Language Check**: Choose between PL / UK / EN.
-2. **Your name** (appears in Google Sheets).
-3. **Your push-to-talk hotkey** (recommended: Right Ctrl).
-4. **Your microphone** & Audio Test.
+2. **Your Name**: Appears in Google Sheets transcriptions.
+3. **Your Macros**: Supports distinct binds for Push-To-Talk and Toggle recording modes!
+4. **Your Microphone**: Fast realtime DB verification.
 
-After setup, the app lives out of the way in the **Windows system tray**. Hold your hotkey to record, release to transcribe and send!
+After setup, the app lives out of the way in the **Windows System Tray**.
+
+---
+
+## Compiling for Distribution
+
+To distribute this to your company's machines, install it as an instantly-booting compiled folder using PyInstaller rather than a standalone `.exe`.
+
+1. Install PyInstaller: `py -m pip install pyinstaller`
+2. Fetch the path of your customtkinter library: `py -c "import customtkinter; import site; print(customtkinter.__file__)"`
+3. Compile the app into the `dist/main` folder using this exact fully resolved build command (ensuring ONNX, version trackers, and UI tools are bundled correctly): 
+   ```bash
+   py -m PyInstaller --noconfirm --onedir --windowed --collect-data faster_whisper --add-data "C:\Users\YOUR_USERNAME\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\customtkinter;customtkinter/" --add-data "version.txt;." main.py
+   ```
+4. Use **Inno Setup** to wrap the resulting `dist/main` folder into an automated installation wizard!
 
 ---
 
@@ -64,9 +67,7 @@ After setup, the app lives out of the way in the **Windows system tray**. Hold y
 
 ### 1. Set up the webhook URL and API key
 
-Unlike older versions, the webhook configuration is statically compiled into the source codebase to prevent user error. 
-
-Before running or distributing the app, open **`sender.py`** and alter these lines at the top:
+Unlike older versions, the webhook configuration is statically compiled into the source codebase (`sender.py`) to prevent user error. 
 
 ```python
 N8N_WEBHOOK_URL = "https://YOUR_N8N_SERVER/webhook/YOUR_WEBHOOK_ID"
@@ -93,25 +94,11 @@ In your n8n instance:
      | `{{$json.text}}` | B (Transcription) |
      | `{{$json.timestamp}}` | C (Time) |
 
-3. **Activate the workflow.**
-
-### Payload sent by VoiceNote
-
-```json
-{
-  "speaker": "Jan Kowalski",
-  "text": "Transkrypcja nagranego zdania…",
-  "timestamp": "2026-04-08T14:30:00"
-}
-```
-
 ---
 
 ## Changing settings later
 
-Right-click the VoiceNote tray icon → **Open Settings** to change your name, model size, or interface language.
-
-To re-run the complete setup and microphone pairing wizard, delete your `config.json` file and restart.
+Right-click the VoiceNote tray icon → **Open Settings** to change your name, model size, hotkeys, or interface language seamlessly without rebooting the app.
 
 ---
 
@@ -127,6 +114,9 @@ To re-run the complete setup and microphone pairing wizard, delete your `config.
 ---
 
 ## Troubleshooting
+
+**Data and Config files are "missing"?**
+All user modifications, debug logs (`voicenote.log`, `crash_log.txt`), and offline fallbacks (`log.csv`) are safely walled off in your `Documents\VoiceNote` folder!
 
 **App asks for device every time** — the USB mic was assigned a different index. Select it again in the dialog.
 

@@ -39,18 +39,19 @@ from ui.loading_screen import ModelLoadingWindow
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
+import paths
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(name)s — %(message)s",
     datefmt="%H:%M:%S",
     handlers=[
-        logging.FileHandler("voicenote.log", encoding="utf-8"),
+        logging.FileHandler(paths.LOG_FILE_PATH, encoding="utf-8"),
         logging.StreamHandler(sys.stderr)
     ]
 )
 logger = logging.getLogger("main")
 
-CONFIG_PATH = Path("config.json")
+CONFIG_PATH = paths.CONFIG_PATH
 
 # ---------------------------------------------------------------------------
 # Config helpers
@@ -135,21 +136,13 @@ def open_settings_window(root: ctk.CTk, config: dict, on_saved):
         height=40, corner_radius=10, fg_color=S2, border_color=S2,
         dropdown_fg_color=S2, font=ctk.CTkFont(size=12), command=on_lang_change))
 
-    mode_cb = row("settings_mode", lambda p: ctk.CTkComboBox(
-        p, values=[t("step2_mode_ptt"), t("step2_mode_toggle")],
-        height=40, corner_radius=10, fg_color=S2, border_color=S2,
-        dropdown_fg_color=S2, font=ctk.CTkFont(size=12)))
+    # Mode dropdown removed as we now support dual simultaneous binds!
 
     name_e.insert(0, config.get("speaker_name", ""))
     model_cb.set(config.get("model_size", "medium"))
     current_lang = get_language()
     lang_cb.set(LANG_MAP.get(current_lang, LANG_MAP["pl"]))
-    
-    current_mode = config.get("recording_mode", "ptt")
-    if current_mode == "toggle":
-        mode_cb.set(t("step2_mode_toggle"))
-    else:
-        mode_cb.set(t("step2_mode_ptt"))
+    # Mode logic removed
     btn_cancel = ctk.CTkButton(btn_row, text="", width=100, height=38, corner_radius=10,
                   fg_color=S2, hover_color=S2, text_color=MUTED,
                   command=lambda: (win.grab_release(), win.destroy()))
@@ -161,42 +154,52 @@ def open_settings_window(root: ctk.CTk, config: dict, on_saved):
 
     # Local hotkey state for settings dialog
     from utils import format_key_name, serialize_key, deserialize_key, is_dangerous_key
-    settings_state = {"hotkey": deserialize_key(config.get("hotkey_str", ""))}
+    settings_state = {
+        "ptt": deserialize_key(config.get("hotkey_ptt_str", config.get("hotkey_str", ""))),
+        "toggle": deserialize_key(config.get("hotkey_toggle_str", ""))
+    }
 
-    def _start_hotkey_capture():
-        btn_hotkey.configure(text=t("step2_listening"), fg_color=ACCENT)
-        def _listen():
-            from pynput import keyboard as kb
-            captured = []
-            def on_press(key):
-                if key != kb.Key.esc and key not in captured:
-                    captured.append(key)
-            def on_release(key):
+    def _build_hk_row(parent, dict_key, title_key):
+        hk_f = ctk.CTkFrame(parent, fg_color=BG)
+        hk_f.pack(fill="x", padx=16, pady=(0, 14))
+        lbl_hk = ctk.CTkLabel(hk_f, text=t(title_key), font=ctk.CTkFont(size=12), text_color=MUTED)
+        lbl_hk.pack(anchor="w")
+        current_val = settings_state[dict_key]
+        current_name = format_key_name(current_val) if current_val else t("step2_no_key")
+        
+        btn_hotkey = ctk.CTkButton(
+            hk_f, text=t("step2_change", name=current_name), height=40, corner_radius=10,
+            fg_color=S2, hover_color=SURFACE, text_color=TEXT, font=ctk.CTkFont(size=12)
+        )
+        
+        def _start_hotkey_capture():
+            btn_hotkey.configure(text=t("step2_listening"), fg_color=ACCENT)
+            def _listen():
+                from pynput import keyboard as kb
+                captured = []
+                def on_press(key):
+                    if key != kb.Key.esc and key not in captured:
+                        captured.append(key)
+                def on_release(key):
+                    if captured:
+                        return False
+                with kb.Listener(on_press=on_press, on_release=on_release) as ls:
+                    ls.join()
                 if captured:
-                    return False
-            with kb.Listener(on_press=on_press, on_release=on_release) as ls:
-                ls.join()
-            if captured:
-                win.after(0, lambda: _on_hotkey_captured(tuple(captured)))
-        import threading
-        threading.Thread(target=_listen, daemon=True).start()
+                    win.after(0, lambda: _on_hotkey_captured(tuple(captured)))
+            import threading
+            threading.Thread(target=_listen, daemon=True).start()
 
-    def _on_hotkey_captured(key):
-        settings_state["hotkey"] = key
-        name = format_key_name(key)
-        btn_hotkey.configure(text=t("step2_change", name=name), fg_color=S2)
+        def _on_hotkey_captured(key):
+            settings_state[dict_key] = key
+            name = format_key_name(key)
+            btn_hotkey.configure(text=t("step2_change", name=name), fg_color=S2)
 
-    hk_f = ctk.CTkFrame(scroll_f, fg_color=BG)
-    hk_f.pack(fill="x", padx=16, pady=(0, 14))
-    lbl_hk = ctk.CTkLabel(hk_f, text=t("step2_title"), font=ctk.CTkFont(size=12), text_color=MUTED)
-    lbl_hk.pack(anchor="w")
-    current_name = format_key_name(settings_state["hotkey"]) if settings_state["hotkey"] else "..."
-    btn_hotkey = ctk.CTkButton(
-        hk_f, text=t("step2_change", name=current_name), height=40, corner_radius=10,
-        fg_color=S2, hover_color=SURFACE, text_color=TEXT, font=ctk.CTkFont(size=12),
-        command=_start_hotkey_capture
-    )
-    btn_hotkey.pack(fill="x", pady=(4, 0))
+        btn_hotkey.configure(command=_start_hotkey_capture)
+        btn_hotkey.pack(fill="x", pady=(4, 0))
+
+    _build_hk_row(scroll_f, "ptt", "settings_ptt")
+    _build_hk_row(scroll_f, "toggle", "settings_toggle")
 
     def _update_texts():
         win.title(t("settings_title"))
@@ -214,9 +217,13 @@ def open_settings_window(root: ctk.CTk, config: dict, on_saved):
         config["speaker_name"] = name_e.get().strip()
         config["model_size"] = model_cb.get()
         config["ui_language"] = INV_LANG_MAP.get(lang_cb.get(), "pl")
-        config["recording_mode"] = "toggle" if mode_cb.get() == t("step2_mode_toggle") else "ptt"
-        if settings_state["hotkey"]:
-            config["hotkey_str"] = serialize_key(settings_state["hotkey"])
+        
+        # Dual config saves
+        if settings_state["ptt"]:
+            config["hotkey_ptt_str"] = serialize_key(settings_state["ptt"])
+        if settings_state["toggle"]:
+            config["hotkey_toggle_str"] = serialize_key(settings_state["toggle"])
+            
         save_config(config)
         on_saved()
         win.grab_release()
@@ -319,16 +326,16 @@ def main():
         root.after(500, lambda: _prompt_device(root, config, recorder))
 
     # ── Hotkey listener ────────────────────────────────────────────────────
-    hk_state = {
-        "target": deserialize_key(config.get("hotkey_str", "")),
-        "mode": config.get("recording_mode", "ptt")
-    }
-    if not hk_state["target"]:
-        logger.error("No valid hotkey in config — please re-run setup.")
-        sys.exit(1)
+    def _load_hk_state():
+        return {
+            "ptt": set(deserialize_key(config.get("hotkey_ptt_str", config.get("hotkey_str", ""))) or []),
+            "toggle": set(deserialize_key(config.get("hotkey_toggle_str", "")) or [])
+        }
+    hk_state = _load_hk_state()
 
     _recording_active = threading.Event()
     pressed_keys = set()
+    _toggle_active = [False]
     
     def _stop_and_process():
         _recording_active.clear()
@@ -378,51 +385,59 @@ def main():
         if key not in pressed_keys:
             pressed_keys.add(key)
             
-        target = set(hk_state["target"])
-        if target and target.issubset(pressed_keys):
-            if hk_state["mode"] == "toggle":
-                if _recording_active.is_set():
+        target_ptt = hk_state["ptt"]
+        target_toggle = hk_state["toggle"]
+
+        # 1. Toggle Mode Activation
+        if target_toggle and target_toggle.issubset(pressed_keys):
+            if _recording_active.is_set():
+                if _toggle_active[0]:
+                    _toggle_active[0] = False
                     _stop_and_process()
-                else:
-                    if not transcriber.is_ready():
-                        tray.notify(t("tray_idle"), t("tray_loading"))
-                        return
-                    _recording_active.set()
-                    ok2, err2 = recorder.start()
-                    if not ok2:
-                        _recording_active.clear()
-                        logger.warning(f"Recording start failed: {err2}")
-                        root.after(0, lambda: _prompt_device(root, config, recorder))
-                        return
-                    tray.set_state("recording")
-            else: # ptt
-                if not _recording_active.is_set():
-                    if not transcriber.is_ready():
-                        tray.notify(t("tray_idle"), t("tray_loading"))
-                        return
-                    _recording_active.set()
-                    ok2, err2 = recorder.start()
-                    if not ok2:
-                        _recording_active.clear()
-                        logger.warning(f"Recording start failed: {err2}")
-                        root.after(0, lambda: _prompt_device(root, config, recorder))
-                        return
-                    tray.set_state("recording")
+            else:
+                if not transcriber.is_ready():
+                    tray.notify(t("tray_idle"), t("tray_loading"))
+                    return
+                _toggle_active[0] = True
+                _recording_active.set()
+                ok2, err2 = recorder.start()
+                if not ok2:
+                    _recording_active.clear()
+                    _toggle_active[0] = False
+                    logger.warning(f"Recording start failed: {err2}")
+                    root.after(0, lambda: _prompt_device(root, config, recorder))
+                    return
+                tray.set_state("recording")
+        
+        # 2. PTT Activation
+        elif target_ptt and target_ptt.issubset(pressed_keys):
+            if not _recording_active.is_set() and not _toggle_active[0]:
+                if not transcriber.is_ready():
+                    tray.notify(t("tray_idle"), t("tray_loading"))
+                    return
+                _recording_active.set()
+                ok2, err2 = recorder.start()
+                if not ok2:
+                    _recording_active.clear()
+                    logger.warning(f"Recording start failed: {err2}")
+                    root.after(0, lambda: _prompt_device(root, config, recorder))
+                    return
+                tray.set_state("recording")
 
     def _on_release(key):
         if key in pressed_keys:
             pressed_keys.remove(key)
             
-        target = set(hk_state["target"])
-        if hk_state["mode"] == "ptt":
-            if _recording_active.is_set() and not target.issubset(pressed_keys):
+        target_ptt = hk_state["ptt"]
+        if target_ptt and not target_ptt.issubset(pressed_keys):
+            if _recording_active.is_set() and not _toggle_active[0]:
                 _stop_and_process()
 
     from pynput import keyboard as kb
     listener = kb.Listener(on_press=_on_press, on_release=_on_release)
     listener.daemon = True
     listener.start()
-    logger.info(f"Hotkey registered: {config.get('hotkey_str')}")
+    logger.info(f"Listener initialized with configs.")
 
     # ── Phase 5: tray action loop (runs on main thread via after()) ────────
     def _process_actions():
@@ -477,6 +492,10 @@ if __name__ == "__main__":
         main()
     except Exception as e:
         import traceback
-        with open("crash_log.txt", "w") as f:
-            f.write(traceback.format_exc())
+        try:
+            import paths
+            with open(paths.CRASH_LOG_PATH, "w") as f:
+                f.write(traceback.format_exc())
+        except Exception:
+            pass # Failsafe
         raise

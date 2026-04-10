@@ -7,8 +7,9 @@ from pathlib import Path
 
 import httpx
 
+import paths
 logger = logging.getLogger(__name__)
-LOG_PATH = Path("log.csv")
+LOG_PATH = paths.LOG_CSV_PATH
 
 N8N_WEBHOOK_URL = "https://n8n.emanager.pro/webhook/voicenote"
 N8N_API_KEY = ""

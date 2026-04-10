@@ -52,7 +52,8 @@ class SetupWizard(ctk.CTk):
         # State
         self.result: Optional[dict] = None
         self._step = 0
-        self._captured_key = None
+        self._captured_key_ptt = None
+        self._captured_key_toggle = None
         self._capturing_hotkey = False
         self._hotkey_listener = None
         self._level_stream = None
@@ -225,41 +226,34 @@ class SetupWizard(ctk.CTk):
     # Step 2 — hotkey ---------------------------------------------------------
 
     def _build_step2(self, f: ctk.CTkFrame):
-        self._current_mode = "ptt"
         self._lbl_s2_t = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=15, weight="bold"), text_color=TEXT)
         self._lbl_s2_t.pack(anchor="w", padx=28, pady=(28, 4))
         
         self._lbl_s2_d = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=12), text_color=MUTED, wraplength=380, justify="left")
         self._lbl_s2_d.pack(anchor="w", padx=28)
 
-        self._mode_combo = ctk.CTkComboBox(
-            f, height=42, corner_radius=10, fg_color=SURFACE2,
-            border_color=SURFACE2, dropdown_fg_color=SURFACE2,
-            font=ctk.CTkFont(size=12), command=self._on_mode_change
-        )
-        self._mode_combo.pack(fill="x", padx=28, pady=(16, 0))
-
-        self._hotkey_btn = ctk.CTkButton(
-            f, text="", height=52, corner_radius=10, font=ctk.CTkFont(size=13),
+        # ── PTT ──
+        self._hotkey_ptt_btn = ctk.CTkButton(
+            f, text="", height=46, corner_radius=10, font=ctk.CTkFont(size=13),
             fg_color=SURFACE2, hover_color=SURFACE, text_color=TEXT,
-            command=self._start_hotkey_capture
+            command=lambda: self._start_hotkey_capture("ptt")
         )
-        self._hotkey_btn.pack(fill="x", padx=28, pady=(20, 0))
+        self._hotkey_ptt_btn.pack(fill="x", padx=28, pady=(16, 0))
+        self._hotkey_ptt_label = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=12), text_color=MUTED)
+        self._hotkey_ptt_label.pack(anchor="w", padx=28, pady=(2, 0))
 
-        self._hotkey_label = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=12), text_color=MUTED)
-        self._hotkey_label.pack(anchor="w", padx=28, pady=(10, 0))
+        # ── Toggle ──
+        self._hotkey_tg_btn = ctk.CTkButton(
+            f, text="", height=46, corner_radius=10, font=ctk.CTkFont(size=13),
+            fg_color=SURFACE2, hover_color=SURFACE, text_color=TEXT,
+            command=lambda: self._start_hotkey_capture("toggle")
+        )
+        self._hotkey_tg_btn.pack(fill="x", padx=28, pady=(8, 0))
+        self._hotkey_tg_label = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=12), text_color=MUTED)
+        self._hotkey_tg_label.pack(anchor="w", padx=28, pady=(2, 0))
 
         self._hotkey_warn = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=11), text_color=WARNING, wraplength=380, justify="left")
         self._hotkey_warn.pack(anchor="w", padx=28, pady=(4, 0))
-
-        self._lbl_s2_tip = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=11), text_color=MUTED, wraplength=380, justify="left")
-        self._lbl_s2_tip.pack(anchor="w", padx=28, pady=(16, 0))
-
-    def _on_mode_change(self, val):
-        if val == t("step2_mode_ptt"):
-            self._current_mode = "ptt"
-        elif val == t("step2_mode_toggle"):
-            self._current_mode = "toggle"
 
     # Step 3 — device ---------------------------------------------------------
 
@@ -367,7 +361,7 @@ class SetupWizard(ctk.CTk):
         return True
 
     def _validate_hotkey(self) -> bool:
-        if self._captured_key is None:
+        if not self._captured_key_ptt and not self._captured_key_toggle:
             self._hotkey_warn.configure(text=t("step2_warn_no_key"), text_color=DANGER)
             return False
         self._hotkey_warn.configure(text="")
@@ -383,12 +377,18 @@ class SetupWizard(ctk.CTk):
 
     # ── Hotkey capture ───────────────────────────────────────────────────────
 
-    def _start_hotkey_capture(self):
+    def _start_hotkey_capture(self, mode="ptt"):
         if self._capturing_hotkey:
             return
         self._capturing_hotkey = True
-        self._hotkey_btn.configure(fg_color=DANGER, hover_color=DANGER)
-        self._hotkey_label.configure(text_color=MUTED)
+        self._capture_target = mode
+        if mode == "ptt":
+            self._hotkey_ptt_btn.configure(fg_color=DANGER, hover_color=DANGER, text=t("step2_listening"))
+            self._hotkey_ptt_label.configure(text_color=MUTED)
+        else:
+            self._hotkey_tg_btn.configure(fg_color=DANGER, hover_color=DANGER, text=t("step2_listening"))
+            self._hotkey_tg_label.configure(text_color=MUTED)
+        
         self._update_texts()
 
         def _listen():
@@ -413,12 +413,15 @@ class SetupWizard(ctk.CTk):
 
     def _on_key_captured(self, key):
         self._capturing_hotkey = False
-        self._captured_key = key
         
-        self._hotkey_btn.configure(
-            fg_color=SUCCESS, hover_color="#45c96e", text_color="#0d0d14"
-        )
-        self._hotkey_label.configure(text_color=SUCCESS)
+        if getattr(self, "_capture_target", "ptt") == "ptt":
+            self._captured_key_ptt = key
+            self._hotkey_ptt_btn.configure(fg_color=SUCCESS, hover_color="#45c96e", text_color="#0d0d14")
+            self._hotkey_ptt_label.configure(text_color=SUCCESS)
+        else:
+            self._captured_key_toggle = key
+            self._hotkey_tg_btn.configure(fg_color=SUCCESS, hover_color="#45c96e", text_color="#0d0d14")
+            self._hotkey_tg_label.configure(text_color=SUCCESS)
         
         if is_dangerous_key(key):
             self._hotkey_warn.configure(text_color=WARNING)
@@ -545,8 +548,8 @@ class SetupWizard(ctk.CTk):
 
         self.result = {
             "speaker_name": self._name_var.get().strip(),
-            "hotkey_str": serialize_key(self._captured_key),
-            "recording_mode": getattr(self, "_current_mode", "ptt"),
+            "hotkey_ptt_str": serialize_key(self._captured_key_ptt) if getattr(self, "_captured_key_ptt", None) else "",
+            "hotkey_toggle_str": serialize_key(self._captured_key_toggle) if getattr(self, "_captured_key_toggle", None) else "",
             "audio_device_index": dev_idx,
             "audio_device_name": dev_name,
             "model_size": "medium",
