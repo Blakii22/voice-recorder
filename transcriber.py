@@ -9,21 +9,31 @@ logger = logging.getLogger(__name__)
 _progress_callback: Optional[Callable[[str, any], None]] = None
 
 # Monkey-patch tqdm to intercept huggingface_hub downloads
-import huggingface_hub.utils._tqdm as hf_tqdm
-_orig_tqdm = hf_tqdm.tqdm
+import huggingface_hub.utils as hf_utils
+import faster_whisper.utils as fw_utils
+_orig_tqdm = hf_utils.tqdm
+
+import time
 
 class TqdmInterceptor(_orig_tqdm):
     def __init__(self, *args, **kwargs):
+        kwargs["disable"] = False
         super().__init__(*args, **kwargs)
-        if _progress_callback:
+        self.disable = False
+        self._last_emit_time = 0
+        if _progress_callback and getattr(self, "unit", "") == "B":
             _progress_callback("desc", self.desc or "Downloading...")
             
     def update(self, n=1):
         super().update(n)
-        if _progress_callback:
-            _progress_callback("update", (self.n, self.total))
+        if _progress_callback and getattr(self, "unit", "") == "B":
+            now = time.time()
+            if self.total and self.n >= self.total or (now - self._last_emit_time) > 0.2:
+                self._last_emit_time = now
+                _progress_callback("update", (self.n, self.total))
 
-hf_tqdm.tqdm = TqdmInterceptor
+hf_utils.tqdm = TqdmInterceptor
+fw_utils.disabled_tqdm = TqdmInterceptor
 
 
 class Transcriber:
@@ -60,9 +70,15 @@ class Transcriber:
                     on_progress("status", "Loading model to memory...")
                 
                 from faster_whisper import WhisperModel
-                model = WhisperModel(
-                    self.model_size, device="auto", compute_type="int8"
-                )
+                try:
+                    model = WhisperModel(
+                        self.model_size, device="auto", compute_type="int8"
+                    )
+                except Exception as cuda_err:
+                    logger.warning(f"GPU/CUDA load failed: {cuda_err}. Falling back to CPU...")
+                    model = WhisperModel(
+                        self.model_size, device="cpu", compute_type="int8"
+                    )
                 with self._lock:
                     self._model = model
                 self._ready.set()
@@ -96,11 +112,28 @@ class Transcriber:
             raise RuntimeError("Whisper model not available")
 
         with self._lock:
-            segments, _ = self._model.transcribe(
-                wav_path,
-                language=self.language,
-                beam_size=5,
-                vad_filter=True,
-                vad_parameters={"min_silence_duration_ms": 300},
-            )
+            try:
+                segments, _ = self._model.transcribe(
+                    wav_path,
+                    language=self.language,
+                    beam_size=5,
+                    vad_filter=True,
+                    vad_parameters={"min_silence_duration_ms": 300},
+                )
+            except Exception as e:
+                err_msg = str(e).lower()
+                if "cublas" in err_msg or "cuda" in err_msg or "dnn" in err_msg:
+                    logger.warning(f"CUDA/cuBLAS failed during inference ({e}). Hot-swapping model to CPU...")
+                    from faster_whisper import WhisperModel
+                    self._model = WhisperModel(self.model_size, device="cpu", compute_type="int8")
+                    segments, _ = self._model.transcribe(
+                        wav_path,
+                        language=self.language,
+                        beam_size=5,
+                        vad_filter=True,
+                        vad_parameters={"min_silence_duration_ms": 300},
+                    )
+                else:
+                    raise
+
             return " ".join(seg.text.strip() for seg in segments).strip()

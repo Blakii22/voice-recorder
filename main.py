@@ -9,9 +9,22 @@ import os
 import queue
 import subprocess
 import sys
+import os
 import threading
 from pathlib import Path
 from typing import Optional
+
+# PyInstaller --windowed sets sys.stdout and sys.stderr to None.
+# TQDM and other libraries crash trying to write to them. Mock them here.
+class _DummyStream:
+    def write(self, *args, **kwargs): pass
+    def flush(self, *args, **kwargs): pass
+    def isatty(self): return False
+
+if sys.stdout is None: sys.stdout = _DummyStream()
+if sys.stderr is None: sys.stderr = _DummyStream()
+if getattr(sys, "__stdout__", None) is None: sys.__stdout__ = _DummyStream()
+if getattr(sys, "__stderr__", None) is None: sys.__stderr__ = _DummyStream()
 
 import customtkinter as ctk
 
@@ -30,6 +43,10 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(name)s — %(message)s",
     datefmt="%H:%M:%S",
+    handlers=[
+        logging.FileHandler("voicenote.log", encoding="utf-8"),
+        logging.StreamHandler(sys.stderr)
+    ]
 )
 logger = logging.getLogger("main")
 
@@ -359,4 +376,10 @@ def _prompt_device(root: ctk.CTk, config: dict, recorder: AudioRecorder):
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        import traceback
+        with open("crash_log.txt", "w") as f:
+            f.write(traceback.format_exc())
+        raise

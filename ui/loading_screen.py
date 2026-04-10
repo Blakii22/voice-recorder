@@ -49,9 +49,6 @@ class ModelLoadingWindow(ctk.CTkToplevel):
         self.protocol("WM_DELETE_WINDOW", lambda: None)
 
     def set_progress(self, downloaded: int, total: int):
-        if total == 0:
-            return
-        
         now = time.time()
         dt = now - self._last_time
         if dt > 0.5:
@@ -63,16 +60,17 @@ class ModelLoadingWindow(ctk.CTkToplevel):
             self._last_time = now
             self._last_downloaded = downloaded
 
-        progress = downloaded / total
-        self.bar.set(progress)
-        
         mb_d = downloaded / (1024*1024)
-        mb_t = total / (1024*1024)
-        self.lbl_status.configure(text=f"Downloading: {mb_d:.1f}/{mb_t:.1f} MB")
-        self.update()
-
+        if total:
+            progress = downloaded / total
+            self.bar.set(progress)
+            
+            mb_t = total / (1024*1024)
+            self.lbl_status.configure(text=f"Downloading: {mb_d:.1f}/{mb_t:.1f} MB")
+        else:
+            self.bar.set(0)
+            self.lbl_status.configure(text=f"Downloading: {mb_d:.1f} MB")
     def set_status(self, text: str):
         self.lbl_status.configure(text=text)
         self.lbl_speed.configure(text="")
-        self.bar.set(0) # set to indeterminate style by repeatedly calling step() if we wanted, but 0 is fine
-        self.update()
+        self.bar.set(0)
