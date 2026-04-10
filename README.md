@@ -24,13 +24,13 @@ Designed as an internal company tool, fully localized and configured out-of-the-
 
 ## Installation
 
-Or just download the latest **`VoiceNote setup.exe`** from the [GitHub Releases](../../releases/latest) page and run the installer.
+Just download the latest **`VoiceNote setup.exe`** from the [GitHub Releases](../../releases/latest) page and run the installer.
 
 > **First run downloads the Whisper model** (~1.5 GB for `medium`). This happens once automatically and you will see a download progress screen displaying the MB/s speed.
 
 ---
 
-## Compile Manually
+## Or compile Manually!
 
 To distribute this to your company's machines, install it as an instantly-booting compiled folder using PyInstaller rather than a standalone `.exe`.
 
